@@ -1,0 +1,67 @@
+{
+    "project": {
+        "name": "my_project",
+        "version": "0.1.0",
+        "description": "A Python project created from template"
+    },
+    "data": {
+        "input_dir": "dataset/TE-KOA-C - sheet_R01_20250410_mostupdated_only RCT data.xlsx",
+        "output_dir": "output",
+        "cache_dir": "cache",
+        "use_sample_data": false,
+        "random_seed": 42
+    },
+    "processing": {
+        "num_workers": 4,
+        "use_gpu": false,
+        "debug_mode": false,
+        "log_level": "INFO",
+        "batch_size": 32,
+        "timeout_seconds": 300
+    },
+    "output": {
+        "save_results": true,
+        "export_formats": ["json", "csv"],
+        "create_visualizations": true,
+        "results_dir": "results"
+    },
+    "model": {
+        "type": "classifier",
+        "algorithm": "random_forest",
+        "hyperparameters": {
+            "n_estimators": 100,
+            "max_depth": 10,
+            "min_samples_split": 2,
+            "random_state": 42
+        },
+        "evaluation": {
+            "metrics": ["accuracy", "precision", "recall", "f1"],
+            "test_size": 0.2,
+            "cross_validation": 5
+        }
+    },
+    "visualization": {
+        "theme": "default",
+        "colormap": "viridis",
+        "dpi": 100,
+        "formats": ["png", "pdf"],
+        "interactive": true
+    },
+    "streamlit": {
+        "theme": {
+            "primaryColor": "#1E88E5",
+            "backgroundColor": "#FFFFFF",
+            "secondaryBackgroundColor": "#F0F2F6",
+            "textColor": "#262730"
+        }
+    },
+    "api": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "workers": 4,
+        "timeout": 30,
+        "cors": {
+            "allowed_origins": "*"
+        }
+    }
+}

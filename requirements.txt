@@ -1,0 +1,23 @@
+# Core dependencies
+numpy
+pandas
+matplotlib
+seaborn
+streamlit
+openpyxl
+altair
+plotly
+scikit-learn
+pytest
+watchdog
+protobuf
+sacremoses
+pillow
+pydantic
+python-dotenv
+
+# Added from the code block
+shap
+scikit-learn
+pytest
+pytest-mock
