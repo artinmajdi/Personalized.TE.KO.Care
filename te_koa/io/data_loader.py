@@ -20,19 +20,22 @@ logger = logging.getLogger(__name__)
 class DataLoader:
     """An enhanced data loader for the Knee Osteoarthritis dataset."""
 
-    def __init__(self, data_dir: Optional[str] = None):
+    def __init__(self, data_dir: Optional[str] = None, uploaded_file: Optional[object] = None):
         """
-        Initialize the DataLoader with a data directory.
+        Initialize the DataLoader with a data directory or uploaded file.
 
         Args:
             data_dir: Path to the data directory or Excel file. If None, uses a default path.
+            uploaded_file: Streamlit uploaded file object. If provided, this takes precedence over data_dir.
         """
-        if data_dir is None:
+        self.uploaded_file = uploaded_file
+
+        if uploaded_file is None and data_dir is None:
             # Try to find a reasonable default path
             possible_paths = [
                 "/Users/artinmajdi/Documents/GitHubs/RAP/te_koa/dataset/te_koa_R01_only_RCT_data.xlsx",
-                "./dataset/TEKOAC sheet_R01_20250410_mostupdated_only RCT data.xlsx",
-                "./TEKOAC sheet_R01_20250410_mostupdated_only RCT data.xlsx"
+                "./dataset/te_koa_R01_only_RCT_data.xlsx",
+                "./te_koa_R01_only_RCT_data.xlsx"
             ]
 
             for path in possible_paths:
@@ -41,9 +44,9 @@ class DataLoader:
                     break
             else:
                 # If no path is found, use current directory
-                self.data_dir = Path.cwd() / "TEKOAC sheet_R01_20250410_mostupdated_only RCT data.xlsx"
+                self.data_dir = Path.cwd() / "te_koa_R01_only_RCT_data.xlsx"
         else:
-            self.data_dir = Path(data_dir)
+            self.data_dir = Path(data_dir) if data_dir else None
 
         # Keep track of loaded data
         self.data = None
@@ -65,13 +68,35 @@ class DataLoader:
 
         Raises:
             FileNotFoundError: If the file doesn't exist
+            ValueError: If required sheets are missing
         """
-        logger.info(f"Loading Knee Osteoarthritis data from {self.data_dir}")
-
         try:
+            # Determine the data source
+            if self.uploaded_file is not None:
+                logger.info("Loading data from uploaded file")
+                excel_file = pd.ExcelFile(self.uploaded_file)
+                source = self.uploaded_file
+            else:
+                logger.info(f"Loading data from file path: {self.data_dir}")
+                if not self.data_dir.exists():
+                    raise FileNotFoundError(f"File not found: {self.data_dir}")
+                excel_file = pd.ExcelFile(self.data_dir)
+                source = self.data_dir
+
+            # Verify required sheets exist
+            sheets = excel_file.sheet_names
+            missing_sheets = []
+            if sheet_name not in sheets:
+                missing_sheets.append(sheet_name)
+            if dictionary_sheet not in sheets:
+                missing_sheets.append(dictionary_sheet)
+
+            if missing_sheets:
+                raise ValueError(f"Missing required sheets: {', '.join(missing_sheets)}")
+
             # Load both data and dictionary sheets
-            data = pd.read_excel(self.data_dir, sheet_name=sheet_name, **kwargs)
-            data_dict = pd.read_excel(self.data_dir, sheet_name=dictionary_sheet, **kwargs)
+            data = pd.read_excel(source, sheet_name=sheet_name, **kwargs)
+            data_dict = pd.read_excel(source, sheet_name=dictionary_sheet, **kwargs)
 
             logger.info(f"Successfully loaded {len(data)} rows from {sheet_name} sheet")
             logger.info(f"Successfully loaded {len(data_dict)} rows from {dictionary_sheet} sheet")
@@ -91,11 +116,8 @@ class DataLoader:
 
             return data, data_dict
 
-        except FileNotFoundError:
-            logger.error(f"File not found: {self.data_dir}")
-            raise
         except Exception as e:
-            logger.error(f"Error loading Excel file {self.data_dir.name}: {e}")
+            logger.error(f"Error loading Excel file: {str(e)}")
             raise
 
     def _normalize_data_dictionary(self):

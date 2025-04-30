@@ -13,6 +13,7 @@ implementing all Phase I components including:
 
 import logging
 import os
+from typing import Optional
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
@@ -80,7 +81,7 @@ class Dashboard:
 
 	def __init__(self):
 		"""Initialize the TE-KOA dashboard component."""
-		self.data_loader = DataLoader()
+		self.data_loader: Optional[DataLoader] = None
 		self.dataset_name = DatasetNames.TE_KOA.value
 		self.data = None
 		self.dictionary = None
@@ -103,19 +104,65 @@ class Dashboard:
 
 	def load_data(self):
 		"""Load the TE-KOA-C dataset."""
-		try:
-			self.data, self.dictionary = self.data_loader.load_data()
-			self.missing_data_report = self.data_loader.get_missing_data_report()
 
-			# Initialize Phase I components
-			if self.data is not None:
-				st.session_state.processed_data = self.data.copy()
+		# Check if file is uploaded in session state
+		if 'uploaded_file' in st.session_state and st.session_state.uploaded_file is not None:
+			uploaded_file = st.session_state.uploaded_file
+			logger.info(f"Loading data from uploaded file: {uploaded_file.name}")
+
+			# Create DataLoader with uploaded file
+			self.data_loader = DataLoader(uploaded_file=uploaded_file)
+
+		if self.data_loader is None:
+			return False
+
+
+		# Load data using the data loader
+		self.data, self.dictionary = self.data_loader.load_data()
+		self.missing_data_report = self.data_loader.get_missing_data_report()
+
+		# Initialize Phase I components if data loaded successfully
+		if self.data is not None:
+			st.session_state.processed_data = self.data.copy()
+			st.session_state.data_loaded_time = pd.Timestamp.now()
+
+			logger.info(f"Successfully loaded data: {len(self.data)} rows, {len(self.data.columns)} columns")
+
+			# Check for required treatment column
+			if 'tx.group' not in self.data.columns:
+				st.warning("Dataset doesn't contain the expected 'tx.group' column for treatment groups. Some functionality may be limited.")
+				logger.warning("tx.group column not found in dataset")
 
 			return True
-		except Exception as e:
-			logger.error(f"Error loading TE-KOA-C dataset: {e}")
-			st.error(f"Error loading dataset: {e}")
-			return False
+
+
+
+	def _analyze_missing_data(self) -> pd.DataFrame:
+		"""
+		Analyze missing data in the dataset.
+
+		Returns:
+			DataFrame containing missing data statistics
+		"""
+		if self.data is None:
+			return None
+
+		# Calculate missing values statistics
+		missing = self.data.isnull().sum()
+		missing_percent = (self.data.isnull().sum() / len(self.data)) * 100
+		data_types = self.data.dtypes
+
+		# Create a report
+		missing_data_report = pd.DataFrame({
+			'Missing Values': missing,
+			'Percentage': missing_percent,
+			'Data Type': data_types
+		})
+
+		# Sort by percentage of missing values, descending
+		missing_data_report = missing_data_report.sort_values('Percentage', ascending=False)
+
+		return missing_data_report
 
 	def render(self):
 		"""Render the TE-KOA-C dashboard."""
@@ -139,8 +186,18 @@ class Dashboard:
 		# Load data if not already loaded
 		if self.data is None or self.dictionary is None:
 			with st.spinner("Loading dataset..."):
-				if not self.load_data():
-					st.stop()
+				# Check if we have an uploaded file first
+				if 'uploaded_file' in st.session_state and st.session_state.uploaded_file is not None:
+					if not self.load_data():
+						st.stop()
+					st.success(f"Loaded dataset from uploaded file: {st.session_state.uploaded_file.name}")
+				else:
+					# Try to load from default path
+					if not self.load_data():
+						# Show instructions for uploading file if loading fails
+						st.error("Could not load dataset from default path.")
+						st.info("Please upload an Excel file using the sidebar. The file should have two sheets: 'Sheet1' with data and 'dictionary' with variable descriptions.")
+						st.stop()
 
 		# Get current page from session state
 		current_page = st.session_state.get('current_page', 'Overview')
@@ -236,18 +293,81 @@ class Dashboard:
 
 	def _render_header(self):
 		"""Render the dashboard header."""
-		st.markdown(f"""
-		<div class="main-header">
-			<h1>{APP_TITLE}</h1>
-			<p>{APP_SUBTITLE}</p>
-			<div class="phase-indicator">{PHASE_TITLE}</div>
-		</div>
-		""", unsafe_allow_html=True)
+		st.image("https://www.nursing.arizona.edu/sites/default/files/styles/max_width_full/public/2023-04/tc%20banner%20home%20hero.png?itok=nJQD6jVY", use_column_width=True)
+
+		# Check data status and display indicator
+		data_loaded = self.data is not None
+
+		# Two-column layout for title and status
+		col1, col2 = st.columns([0.7, 0.3])
+
+		with col1:
+			st.title(APP_TITLE)
+
+		with col2:
+			st.markdown("<div style='height: 25px'></div>", unsafe_allow_html=True)  # Vertical spacing
+			data_source = ""
+
+			# Show source info
+			if data_loaded:
+				if 'uploaded_file' in st.session_state and st.session_state.uploaded_file is not None:
+					data_source = f"📄 {st.session_state.uploaded_file.name}"
+				else:
+					data_source = "🔍 Default dataset"
+
+			# Create status indicator
+			data_status = "✅" if data_loaded else "❌"
+			status_text = f"Data Loaded: {data_status}"
+			if data_source:
+				status_text += f" | Source: {data_source}"
+
+			st.markdown(
+				f"<div style='text-align: right; padding: 10px; "
+				f"border-radius: 5px; background-color: {'#E8F0FE' if data_loaded else '#FFF3CD'}; "
+				f"color: {'#000080' if data_loaded else '#856404'}; font-weight: bold;'>"
+				f"{status_text}</div>",
+				unsafe_allow_html=True
+			)
 
 	def _render_sidebar(self):
 		"""Render the sidebar navigation."""
 		with st.sidebar:
 			st.image("https://www.nursing.arizona.edu/sites/default/files/styles/uaqs_large/public/2023-05/Primary-logo-Nursing.png?itok=l84uKF2Z", width=200)
+
+			# Add file upload section at the top
+			st.markdown("### Data Source")
+
+			# Option to use demo dataset
+			use_demo = st.checkbox("Use demo dataset", value=True,
+			                      help="Use the included TE-KOA dataset for demonstration")
+
+			if use_demo:
+				if 'uploaded_file' in st.session_state:
+					del st.session_state.uploaded_file
+				if self.data is None:
+					if st.button("Load Demo Dataset", key="load_demo_btn"):
+						# Reset data to force reloading
+						self.data = None
+						self.dictionary = None
+						st.rerun()
+			else:
+				uploaded_file = st.file_uploader("Upload Excel dataset", type=["xlsx", "xls"])
+
+				if uploaded_file is not None:
+					# Store the uploaded file in session state
+					if 'uploaded_file' not in st.session_state or st.session_state.uploaded_file != uploaded_file:
+						st.session_state.uploaded_file = uploaded_file
+						# Reset data to force reloading with the new file
+						self.data = None
+						self.dictionary = None
+						st.success("File uploaded! Click 'Load Dataset' to process it.")
+
+				# Add a load button
+				if 'uploaded_file' in st.session_state and st.session_state.uploaded_file is not None:
+					if st.button("Load Uploaded Dataset", key="load_dataset_btn"):
+						# This will trigger data loading in the render method
+						if self.data is None or self.dictionary is None:
+							st.rerun()
 
 			st.markdown("### Navigation")
 
