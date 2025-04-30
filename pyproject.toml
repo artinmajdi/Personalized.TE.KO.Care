@@ -21,27 +21,7 @@ classifiers = [
 ]
 keywords = ["nursing research", "healthcare", "AI", "medical analysis"]
 requires-python = ">=3.10"
-dependencies = [
-    "numpy",
-    "pandas",
-    "matplotlib",
-    "seaborn",
-    "streamlit",
-    "openpyxl",
-    "altair",
-    "plotly",
-    "scikit-learn",
-    "watchdog",
-    "protobuf",
-    "sacremoses",
-    "pillow",
-    "pydantic",
-    "python-dotenv",
-    "fastapi",
-    "shap",
-    "pytest",
-    "pytest-mock"
-]
+dynamic = ["dependencies"]
 
 [project.urls]
 Homepage      = "https://github.com/artinmajdi/te_koa"
@@ -56,6 +36,9 @@ te_koa-dashboard = "te_koa.cli:run_dashboard"
 [tool.setuptools]
 packages = ["te_koa"]
 include-package-data = true
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.package-data]
 te_koa = ["**/*.py"]

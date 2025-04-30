@@ -26,6 +26,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import colorcet as cc
 import time
+import networkx as nx
+from wordcloud import WordCloud
+from scipy import stats as scipy_stats
+import json
 
 from te_koa.io.data_loader import DataLoader
 from te_koa.utils.variable_screener import VariableScreener
@@ -794,9 +798,6 @@ class Dashboard:
 							))
 
 				if edges:
-					# Create a graph with networkx and plot with plotly
-					import networkx as nx
-
 					G = nx.Graph()
 					for var in selected_corr_vars:
 						G.add_node(var)
@@ -1082,7 +1083,7 @@ class Dashboard:
 			# Word cloud of variable descriptions
 			if st.checkbox("Show Variable Description Word Cloud"):
 				try:
-					from wordcloud import WordCloud
+
 
 					# Combine all descriptions
 					all_descriptions = " ".join([
@@ -1499,7 +1500,7 @@ class Dashboard:
 
 								# Perform t-test if enough samples
 								if len(imputed_values) >= 5 and len(original_values) >= 5:
-									from scipy import stats as scipy_stats
+
 
 									t_stat, p_value = scipy_stats.ttest_ind(
 										original_values.dropna(),
@@ -1688,8 +1689,6 @@ class Dashboard:
 								st.subheader("Correlation Network Graph")
 
 								# Create network graph
-								import networkx as nx
-
 								G = nx.Graph()
 								for var in corr_vars:
 									G.add_node(var)
@@ -3475,7 +3474,7 @@ class Dashboard:
 											# Simple statistical test (ANOVA)
 											if len(groups_to_compare) > 1:
 												try:
-													from scipy import stats as scipy_stats
+
 
 													# Prepare data for ANOVA
 													anova_data = []
@@ -3891,7 +3890,7 @@ class Dashboard:
 								# Export metadata if requested
 								if include_metadata and pipeline_results:
 									# Convert pipeline results to JSON
-									import json
+
 
 									# Ensure all numpy arrays and other non-serializable objects are converted
 									def convert_for_json(obj):

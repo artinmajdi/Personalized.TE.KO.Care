@@ -16,12 +16,14 @@ pillow
 pydantic
 python-dotenv
 
-# Added from the code block
+# Visualization and analysis
 shap
-scikit-learn
-pytest
-pytest-mock
 statsmodels
 scipy
 prince
 colorcet
+networkx
+wordcloud
+
+# Testing
+pytest-mock
