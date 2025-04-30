@@ -2130,29 +2130,2046 @@ class Dashboard:
 							standardize=standardize
 						)
 
-						# Store in session state
+# Store in session state
 						if 'pipeline_results' not in st.session_state:
-							st
+							st.session_state.pipeline_results = {}
 
+						st.session_state.pipeline_results['dimensionality_reduction'] = {
+							'method': 'pca',
+							'n_components': n_components,
+							'standardize': standardize,
+							'variables': selected_vars,
+							'explained_variance': pca_results['explained_variance_ratio'].tolist(),
+							'cumulative_explained_variance': pca_results['cumulative_explained_variance'].tolist()
+						}
 
+						# Display results
+						st.success(f"PCA successfully performed with {n_components} components!")
 
+						# Scree plot
+						st.subheader("Scree Plot")
+						fig, _ = self.dimensionality_reducer.plot_scree(method='pca')
+						st.pyplot(fig)
 
-def main() -> None:
-    """Main entry point for the dashboard application."""
-    try:
-        # Configure logging
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
+						# Get optimal number of components
+						variance_threshold = 0.75  # 75% explained variance
+						optimal_components = self.dimensionality_reducer.get_optimal_components(
+							method='pca',
+							variance_threshold=variance_threshold
+						)
 
-        # Create and run dashboard
-        dashboard = Dashboard()
-        dashboard.render()
-    except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
-        logger.error(f"Dashboard error: {e}", exc_info=True)
+						st.markdown(f"**Optimal number of components:** {optimal_components} "
+								   f"(explaining {variance_threshold*100:.0f}% of variance)")
+
+						# Variance explained table
+						variance_df = self.dimensionality_reducer.get_variance_explained(method='pca')
+						variance_df = variance_df.head(min(10, len(variance_df)))  # Show first 10 components max
+
+						st.subheader("Explained Variance by Component")
+						st.dataframe(variance_df.style.format({
+							'Explained_Variance': '{:.3f}',
+							'Cumulative_Variance': '{:.3f}'
+						}))
+
+						# Biplot for first two components
+						st.subheader("PCA Biplot (First Two Components)")
+						fig, _ = self.dimensionality_reducer.plot_biplot(pc1=1, pc2=2, method='pca')
+						st.pyplot(fig)
+			else:
+				st.warning("Please select variables for PCA.")
+
+		with tabs[1]:  # FAMD Analysis
+			st.subheader("Factor Analysis of Mixed Data (FAMD)")
+
+			st.markdown("""
+			Factor Analysis of Mixed Data (FAMD) is a dimensionality reduction technique designed for datasets
+			containing both numeric and categorical variables. It's an extension of PCA that can handle mixed data types.
+			""")
+
+			# FAMD settings
+			if self.dimensionality_reducer is not None:
+				# Check if we have both numeric and categorical variables
+				has_numeric = len(self.dimensionality_reducer.numeric_vars) > 0
+				has_categorical = len(self.dimensionality_reducer.categorical_vars) > 0
+
+				if has_numeric or has_categorical:
+					col1, col2 = st.columns(2)
+
+					with col1:
+						# Number of components
+						max_components = min(20, len(st.session_state.processed_data.columns))
+
+						n_components = st.slider(
+							"Number of components (FAMD)",
+							min_value=2,
+							max_value=max_components,
+							value=min(8, max_components)
+						)
+
+					with col2:
+						# Variance threshold
+						variance_threshold = st.slider(
+							"Variance threshold (%)",
+							min_value=50,
+							max_value=95,
+							value=75,
+							step=5
+						) / 100  # Convert to proportion
+
+					# Perform FAMD
+					if st.button("Perform FAMD"):
+						with st.spinner("Performing FAMD..."):
+							try:
+								# Run FAMD
+								famd_results = self.dimensionality_reducer.perform_famd(
+									n_components=n_components
+								)
+
+								# Store in session state
+								if 'pipeline_results' not in st.session_state:
+									st.session_state.pipeline_results = {}
+
+								st.session_state.pipeline_results['dimensionality_reduction'] = {
+									'method': 'famd',
+									'n_components': n_components,
+									'variables': list(st.session_state.processed_data.columns),
+									'explained_variance': famd_results['explained_variance'].tolist()
+										if isinstance(famd_results.get('explained_variance', None), (list, np.ndarray)) else None,
+									'cumulative_explained_variance': famd_results['cumulative_explained_variance'].tolist()
+										if isinstance(famd_results.get('cumulative_explained_variance', None), (list, np.ndarray)) else None
+								}
+
+								# Display results
+								st.success(f"FAMD successfully performed with {n_components} components!")
+
+								# Scree plot
+								st.subheader("Scree Plot")
+								fig, _ = self.dimensionality_reducer.plot_scree(method='famd')
+								st.pyplot(fig)
+
+								# Get optimal number of components
+								optimal_components = self.dimensionality_reducer.get_optimal_components(
+									method='famd',
+									variance_threshold=variance_threshold
+								)
+
+								st.markdown(f"**Optimal number of components:** {optimal_components} "
+										  f"(explaining {variance_threshold*100:.0f}% of variance)")
+
+								# Variance explained table
+								variance_df = self.dimensionality_reducer.get_variance_explained(method='famd')
+								variance_df = variance_df.head(min(10, len(variance_df)))  # Show first 10 components max
+
+								st.subheader("Explained Variance by Component")
+								st.dataframe(variance_df.style.format({
+									'Explained_Variance': '{:.3f}',
+									'Cumulative_Variance': '{:.3f}'
+								}))
+							except Exception as e:
+								st.error(f"Error during FAMD: {e}")
+								logger.error(f"FAMD error: {e}", exc_info=True)
+				else:
+					if not has_numeric:
+						st.warning("No numeric variables available for FAMD.")
+					if not has_categorical:
+						st.warning("No categorical variables available for FAMD.")
+			else:
+				st.warning("Data not available for FAMD. Please complete data imputation first.")
+
+		with tabs[2]:  # Component Interpretation
+			st.subheader("Component Interpretation")
+
+			st.markdown("""
+			Understanding what each component represents is crucial for interpreting the dimensionality
+			reduction results. This tab helps visualize and interpret the principal components.
+			""")
+
+			# Select method and component
+			if self.dimensionality_reducer is not None:
+				col1, col2 = st.columns(2)
+
+				with col1:
+					# Select method
+					method = st.selectbox(
+						"Select method",
+						options=["pca", "famd"],
+						index=0,
+						format_func=lambda x: "PCA" if x == "pca" else "FAMD"
+					)
+
+				with col2:
+					# Select component to interpret
+					max_components = 10  # Limit to first 10 components
+					component = st.slider(
+						"Select component to interpret",
+						min_value=1,
+						max_value=max_components,
+						value=1
+					)
+
+				# Check if method results are available
+				method_results_available = False
+
+				if method == "pca" and hasattr(self.dimensionality_reducer, 'pca_results') and self.dimensionality_reducer.pca_results:
+					method_results_available = True
+				elif method == "famd" and hasattr(self.dimensionality_reducer, 'famd_results') and self.dimensionality_reducer.famd_results:
+					method_results_available = True
+
+				if method_results_available:
+					# Number of variables to show in loading plot
+					n_top = st.slider(
+						"Number of top variables to show",
+						min_value=5,
+						max_value=20,
+						value=10
+					)
+
+					# Plot component loadings
+					st.subheader(f"Component {component} Loadings")
+					try:
+						fig, _ = self.dimensionality_reducer.plot_component_loadings(
+							component=component,
+							method=method,
+							n_top=n_top
+						)
+						st.pyplot(fig)
+
+						# Get loading values
+						loadings = self.dimensionality_reducer.get_component_loadings(method=method)
+
+						if not loadings.empty:
+							component_name = f'PC{component}' if method == 'pca' else f'Dim{component}'
+
+							if component_name in loadings.columns:
+								# Sort loadings by absolute value
+								abs_loadings = loadings[component_name].abs().sort_values(ascending=False)
+
+								# Create a DataFrame with variable descriptions
+								loading_df = pd.DataFrame({
+									'Variable': abs_loadings.index,
+									'Loading': [loadings.loc[var, component_name] for var in abs_loadings.index],
+									'Abs_Loading': abs_loadings.values
+								}).head(n_top)
+
+								# Add descriptions
+								loading_df['Description'] = loading_df['Variable'].apply(
+									lambda var: self.data_loader.get_variable_description(var) or "No description available"
+								)
+
+								# Display the table
+								st.dataframe(loading_df.style.format({
+									'Loading': '{:.3f}',
+									'Abs_Loading': '{:.3f}'
+								}))
+
+								# Suggest component interpretation
+								st.subheader("Suggested Interpretation")
+
+								# Get positive and negative loadings
+								pos_loadings = loading_df[loading_df['Loading'] > 0].sort_values('Loading', ascending=False)
+								neg_loadings = loading_df[loading_df['Loading'] < 0].sort_values('Loading')
+
+								if not pos_loadings.empty:
+									st.markdown("**Positive association:**")
+									st.markdown(", ".join(pos_loadings['Variable'].head(5).tolist()))
+
+								if not neg_loadings.empty:
+									st.markdown("**Negative association:**")
+									st.markdown(", ".join(neg_loadings['Variable'].head(5).tolist()))
+							else:
+								st.warning(f"Component {component_name} not found in loadings.")
+						else:
+							st.warning("No loadings available.")
+					except Exception as e:
+						st.error(f"Error plotting component loadings: {e}")
+						logger.error(f"Component loadings error: {e}", exc_info=True)
+				else:
+					st.warning(f"No {method.upper()} results available. Please run {method.upper()} first.")
+			else:
+				st.warning("Data not available for component interpretation. Please complete dimensionality reduction first.")
+
+		with tabs[3]:  # Transformed Data
+			st.subheader("Transformed Data")
+
+			st.markdown("""
+			This tab allows you to transform the original data into the reduced dimensionality space
+			and examine the resulting dataset.
+			""")
+
+			# Select method and number of components
+			if self.dimensionality_reducer is not None:
+				col1, col2 = st.columns(2)
+
+				with col1:
+					# Select method
+					method = st.selectbox(
+						"Select transformation method",
+						options=["pca", "famd"],
+						index=0,
+						format_func=lambda x: "PCA" if x == "pca" else "FAMD"
+					)
+
+				with col2:
+					# Check if method results are available
+					method_results_available = False
+					max_components = 10  # Default max
+
+					if method == "pca" and hasattr(self.dimensionality_reducer, 'pca_results') and self.dimensionality_reducer.pca_results:
+						method_results_available = True
+						max_components = min(10, len(self.dimensionality_reducer.pca_results.get('explained_variance_ratio', [])))
+					elif method == "famd" and hasattr(self.dimensionality_reducer, 'famd_results') and self.dimensionality_reducer.famd_results:
+						method_results_available = True
+						max_components = min(10, len(self.dimensionality_reducer.famd_results.get('explained_variance', [])))
+
+					# Select number of components
+					if method_results_available:
+						n_components = st.slider(
+							"Number of components to keep",
+							min_value=2,
+							max_value=max_components,
+							value=min(5, max_components)
+						)
+					else:
+						n_components = 5  # Default value
+
+				if method_results_available:
+					# Get optimal components based on variance threshold
+					variance_threshold = 0.75  # Default 75% threshold
+
+					optimal_components = self.dimensionality_reducer.get_optimal_components(
+						method=method,
+						variance_threshold=variance_threshold
+					)
+
+					st.markdown(f"**Optimal number of components:** {optimal_components} "
+							   f"(explaining {variance_threshold*100:.0f}% of variance)")
+
+					# Transform data
+					if st.button("Transform Data"):
+						with st.spinner("Transforming data..."):
+							try:
+								# Transform data to components
+								transformed_data = self.dimensionality_reducer.transform_data(
+									method=method,
+									n_components=n_components
+								)
+
+								if not transformed_data.empty:
+									# Display transformed data
+									st.subheader("Transformed Data (First 10 rows)")
+									st.dataframe(transformed_data.head(10))
+
+									# Visualize transformed data (first two components)
+									st.subheader("Visualization of First Two Components")
+
+									if len(transformed_data.columns) >= 2:
+										# Create scatter plot
+										fig = px.scatter(
+											transformed_data,
+											x=transformed_data.columns[0],
+											y=transformed_data.columns[1],
+											title=f'First Two Components ({method.upper()})',
+											color_discrete_sequence=[COLOR_PALETTE['primary']]
+										)
+
+										st.plotly_chart(fig, use_container_width=True)
+
+										# Add treatment group coloring if available
+										if self.treatment_groups is not None and 'tx.group' in self.data.columns:
+											# Copy transformed data and add treatment group
+											vis_data = transformed_data.copy()
+											vis_data['Treatment Group'] = self.data['tx.group'].map({
+												0: 'Control (Sham)',
+												1: 'tDCS + Meditation',
+												2: 'tDCS Only',
+												3: 'Meditation Only'
+											})
+
+											# Create scatter plot with treatment groups
+											fig = px.scatter(
+												vis_data,
+												x=vis_data.columns[0],
+												y=vis_data.columns[1],
+												color='Treatment Group',
+												title=f'First Two Components by Treatment Group ({method.upper()})',
+												color_discrete_map=TREATMENT_COLORS
+											)
+
+											st.plotly_chart(fig, use_container_width=True)
+
+									# Option to save transformed data
+									if st.button("Save Transformed Data to Session"):
+										# Store transformed data in session state
+										st.session_state.processed_data = transformed_data
+
+										# Update pipeline results
+										if 'pipeline_results' not in st.session_state:
+											st.session_state.pipeline_results = {}
+
+										st.session_state.pipeline_results['dimensionality_reduction']['transformed_data_shape'] = transformed_data.shape
+
+										st.success(f"Transformed data with {n_components} components saved to session. "
+												f"Shape: {transformed_data.shape}")
+								else:
+									st.warning("No transformed data generated.")
+							except Exception as e:
+								st.error(f"Error transforming data: {e}")
+								logger.error(f"Data transformation error: {e}", exc_info=True)
+				else:
+					st.warning(f"No {method.upper()} results available. Please run {method.upper()} first.")
+			else:
+				st.warning("Data not available for transformation. Please complete dimensionality reduction first.")
+
+	def _render_data_quality(self):
+		"""Render data quality enhancement tools."""
+		st.header("Data Quality Enhancement")
+
+		# Initialize data quality enhancer if not done and data is available
+		if self.data_quality_enhancer is None and st.session_state.processed_data is not None:
+			self.data_quality_enhancer = DataQualityEnhancer(st.session_state.processed_data)
+
+		# Tab navigation for data quality
+		tabs = st.tabs(["Outlier Detection", "Distribution Analysis", "Transformations", "Standardization"])
+
+		with tabs[0]:  # Outlier Detection
+			st.subheader("Outlier Detection")
+
+			st.markdown("""
+			Outliers are observations that deviate significantly from other observations and can affect statistical
+			analyses. This tool helps identify outliers using different methods.
+			""")
+
+			# Outlier detection settings
+			if self.data_quality_enhancer is not None:
+				col1, col2 = st.columns(2)
+
+				with col1:
+					# Select method
+					method = st.selectbox(
+						"Select outlier detection method",
+						options=["iqr", "zscore", "modified_zscore"],
+						index=0,
+						format_func=lambda x: {
+							"iqr": "Interquartile Range (IQR)",
+							"zscore": "Z-Score",
+							"modified_zscore": "Modified Z-Score"
+						}.get(x, x)
+					)
+
+				with col2:
+					# Threshold for outlier detection
+					if method == "iqr":
+						threshold = st.slider(
+							"IQR multiplier",
+							min_value=1.0,
+							max_value=3.0,
+							value=1.5,
+							step=0.1,
+							help="Values beyond median ± (threshold × IQR) are considered outliers."
+						)
+					elif method == "zscore":
+						threshold = st.slider(
+							"Z-score threshold",
+							min_value=2.0,
+							max_value=4.0,
+							value=3.0,
+							step=0.1,
+							help="Values with absolute z-score above threshold are considered outliers."
+						)
+					else:  # modified_zscore
+						threshold = st.slider(
+							"Modified z-score threshold",
+							min_value=2.0,
+							max_value=5.0,
+							value=3.5,
+							step=0.1,
+							help="Values with absolute modified z-score above threshold are considered outliers."
+						)
+
+				# Select variables for outlier detection
+				numeric_vars = self.data_quality_enhancer.numeric_vars
+
+				selected_vars = st.multiselect(
+					"Select variables for outlier detection",
+					options=numeric_vars,
+					default=numeric_vars[:5] if len(numeric_vars) >= 5 else numeric_vars
+				)
+
+				# Detect outliers
+				if selected_vars and st.button("Detect Outliers"):
+					with st.spinner("Detecting outliers..."):
+						try:
+							# Detect outliers for selected variables
+							outliers = self.data_quality_enhancer.detect_outliers(
+								method=method,
+								threshold=threshold,
+								variables=selected_vars
+							)
+
+							# Store in pipeline results
+							if 'pipeline_results' not in st.session_state:
+								st.session_state.pipeline_results = {}
+
+							if 'data_quality' not in st.session_state.pipeline_results:
+								st.session_state.pipeline_results['data_quality'] = {}
+
+							st.session_state.pipeline_results['data_quality']['outliers'] = {
+								'method': method,
+								'threshold': threshold,
+								'variables': selected_vars,
+								'summary': outliers.get('summary', {})
+							}
+
+							# Display results
+							summary = outliers.get('summary', {})
+
+							if 'total_outliers_detected' in summary:
+								outlier_count = summary['total_outliers_detected']
+
+								if outlier_count > 0:
+									st.warning(f"Detected {outlier_count} outliers across {summary.get('variables_with_outliers', 0)} variables.")
+								else:
+									st.success("No outliers detected.")
+
+								# Display outlier counts by variable
+								if 'variable_outlier_counts' in summary:
+									counts = summary['variable_outlier_counts']
+
+									if counts:
+										# Create a DataFrame for display
+										counts_df = pd.DataFrame({
+											'Variable': list(counts.keys()),
+											'Outliers': list(counts.values())
+										}).sort_values('Outliers', ascending=False)
+
+										st.dataframe(counts_df)
+
+										# Create bar chart of outlier counts
+										fig = px.bar(
+											counts_df,
+											x='Outliers',
+											y='Variable',
+											orientation='h',
+											title='Outlier Counts by Variable',
+											color='Outliers',
+											color_continuous_scale='RdYlGn_r'
+										)
+
+										st.plotly_chart(fig, use_container_width=True)
+
+										# Select a variable to examine
+										st.subheader("Examine Variable Outliers")
+
+										selected_outlier_var = st.selectbox(
+											"Select a variable to examine outliers",
+											options=[var for var in counts_df['Variable'] if counts_df.loc[counts_df['Variable'] == var, 'Outliers'].iloc[0] > 0],
+											index=0 if len(counts_df[counts_df['Outliers'] > 0]) > 0 else None
+										)
+
+										if selected_outlier_var:
+											# Plot outliers for selected variable
+											fig, _ = self.data_quality_enhancer.plot_outliers(
+												variable=selected_outlier_var,
+												method=method,
+												threshold=threshold
+											)
+
+											st.pyplot(fig)
+
+											# Get details about outliers
+											details = outliers.get('details', {}).get(selected_outlier_var, {})
+
+											if details:
+												# Display outlier indices and values
+												outlier_indices = details.get('outlier_indices', [])
+
+												if outlier_indices:
+													# Get outlier values
+													outlier_values = [st.session_state.processed_data.iloc[i][selected_outlier_var]
+																	 for i in outlier_indices if i < len(st.session_state.processed_data)]
+
+													# Create DataFrame
+													outlier_df = pd.DataFrame({
+														'Index': outlier_indices,
+														'Value': outlier_values
+													})
+
+													st.dataframe(outlier_df)
+							else:
+								st.info("No outlier summary available.")
+						except Exception as e:
+							st.error(f"Error detecting outliers: {e}")
+							logger.error(f"Outlier detection error: {e}", exc_info=True)
+			else:
+				st.warning("Data not available for outlier detection. Please complete previous steps first.")
+
+		with tabs[1]:  # Distribution Analysis
+			st.subheader("Distribution Analysis")
+
+			st.markdown("""
+			Analyzing variable distributions helps understand data characteristics and identify transformations
+			that may improve model performance. This tool evaluates normality, skewness, and other distribution properties.
+			""")
+
+			# Distribution analysis settings
+			if self.data_quality_enhancer is not None:
+				# Select variables for analysis
+				numeric_vars = self.data_quality_enhancer.numeric_vars
+
+				selected_vars = st.multiselect(
+					"Select variables for distribution analysis",
+					options=numeric_vars,
+					default=numeric_vars[:5] if len(numeric_vars) >= 5 else numeric_vars
+				)
+
+				# Analyze distributions
+				if selected_vars and st.button("Analyze Distributions"):
+					with st.spinner("Analyzing distributions..."):
+						try:
+							# Analyze distributions for selected variables
+							distributions = self.data_quality_enhancer.analyze_distributions(
+								variables=selected_vars
+							)
+
+							# Store in pipeline results
+							if 'pipeline_results' not in st.session_state:
+								st.session_state.pipeline_results = {}
+
+							if 'data_quality' not in st.session_state.pipeline_results:
+								st.session_state.pipeline_results['data_quality'] = {}
+
+							st.session_state.pipeline_results['data_quality']['distributions'] = {
+								'variables': selected_vars,
+								'summary': distributions.get('summary', {})
+							}
+
+							# Display results
+							summary = distributions.get('summary', {})
+							details = distributions.get('details', {})
+
+							if details:
+								# Create a DataFrame for display
+								dist_df = pd.DataFrame({
+									'Variable': list(details.keys()),
+									'Mean': [details[var]['mean'] for var in details],
+									'Median': [details[var]['median'] for var in details],
+									'Std Dev': [details[var]['std'] for var in details],
+									'Skewness': [details[var]['skewness'] for var in details],
+									'Kurtosis': [details[var]['kurtosis'] for var in details],
+									'Normal (p>0.05)': [details[var]['is_normal'] for var in details],
+									'Shapiro p-value': [details[var]['shapiro_p'] for var in details]
+								}).sort_values('Skewness', key=abs, ascending=False)
+
+								# Display the table
+								st.dataframe(dist_df.style.format({
+									'Mean': '{:.3f}',
+									'Median': '{:.3f}',
+									'Std Dev': '{:.3f}',
+									'Skewness': '{:.3f}',
+									'Kurtosis': '{:.3f}',
+									'Shapiro p-value': '{:.4f}'
+								}))
+
+								# Summary statistics
+								col1, col2, col3 = st.columns(3)
+
+								col1.metric(
+									"Variables with Normal Distribution",
+									f"{summary.get('normal_variables', 0)} ({summary.get('normal_variables', 0) / len(details) * 100:.1f}%)"
+								)
+
+								col2.metric(
+									"Variables with Skewness > 1",
+									f"{summary.get('skewed_variables', 0)} ({summary.get('skewed_variables', 0) / len(details) * 100:.1f}%)"
+								)
+
+								col3.metric(
+									"Variables with Skewness > 2",
+									f"{summary.get('highly_skewed_variables', 0)} ({summary.get('highly_skewed_variables', 0) / len(details) * 100:.1f}%)"
+								)
+
+								# Select a variable to examine
+								st.subheader("Examine Variable Distribution")
+
+								selected_dist_var = st.selectbox(
+									"Select a variable to examine distribution",
+									options=list(details.keys()),
+									index=0
+								)
+
+								if selected_dist_var:
+									# Plot distribution for selected variable
+									fig, _ = self.data_quality_enhancer.plot_distribution(
+										variable=selected_dist_var,
+										original=True,
+										transformed=False
+									)
+
+									st.pyplot(fig)
+
+									# Display variable details
+									var_details = details.get(selected_dist_var, {})
+
+									if var_details:
+										st.subheader("Distribution Statistics")
+
+										col1, col2 = st.columns(2)
+
+										with col1:
+											st.markdown("**Basic Statistics:**")
+											st.markdown(f"- Mean: {var_details.get('mean', 0):.3f}")
+											st.markdown(f"- Median: {var_details.get('median', 0):.3f}")
+											st.markdown(f"- Std Dev: {var_details.get('std', 0):.3f}")
+											st.markdown(f"- Min: {var_details.get('min', 0):.3f}")
+											st.markdown(f"- Max: {var_details.get('max', 0):.3f}")
+
+										with col2:
+											st.markdown("**Distribution Shape:**")
+											st.markdown(f"- Skewness: {var_details.get('skewness', 0):.3f}")
+											st.markdown(f"- Kurtosis: {var_details.get('kurtosis', 0):.3f}")
+											st.markdown(f"- Normality (Shapiro p-value): {var_details.get('shapiro_p', 0):.4f}")
+
+											is_normal = var_details.get('is_normal', False)
+											st.markdown(f"- Normal Distribution: {'✅ Yes' if is_normal else '❌ No'}")
+							else:
+								st.info("No distribution details available.")
+						except Exception as e:
+							st.error(f"Error analyzing distributions: {e}")
+							logger.error(f"Distribution analysis error: {e}", exc_info=True)
+			else:
+				st.warning("Data not available for distribution analysis. Please complete previous steps first.")
+
+		with tabs[2]:  # Transformations
+			st.subheader("Variable Transformations")
+
+			st.markdown("""
+			Variable transformations can improve model performance by making distributions more symmetric or
+			linear relationships more apparent. This tool recommends and applies appropriate transformations.
+			""")
+
+			# Variable transformation settings
+			if self.data_quality_enhancer is not None:
+				# Get transformation recommendations
+				if st.button("Get Transformation Recommendations"):
+					with st.spinner("Analyzing variables and recommending transformations..."):
+						try:
+							# Get recommendations
+							transformations = self.data_quality_enhancer.recommend_transformations()
+
+							# Store in pipeline results
+							if 'pipeline_results' not in st.session_state:
+								st.session_state.pipeline_results = {}
+
+							if 'data_quality' not in st.session_state.pipeline_results:
+								st.session_state.pipeline_results['data_quality'] = {}
+
+							st.session_state.pipeline_results['data_quality']['transformations'] = {
+								'summary': transformations.get('summary', {})
+							}
+
+							# Display results
+							recommendations = transformations.get('recommendations', {})
+							summary = transformations.get('summary', {})
+
+							if recommendations:
+								# Display summary
+								col1, col2 = st.columns(2)
+
+								col1.metric(
+									"Variables Analyzed",
+									summary.get('variables_analyzed', 0)
+								)
+
+								col2.metric(
+									"Variables Needing Transformation",
+									summary.get('variables_needing_transformation', 0)
+								)
+
+								# Create a DataFrame for display
+								rec_df = pd.DataFrame({
+									'Variable': list(recommendations.keys()),
+									'Recommendation': [recommendations[var]['recommendation'] for var in recommendations],
+									'Reason': [recommendations[var]['reason'] for var in recommendations],
+									'Skewness': [recommendations[var]['skewness'] for var in recommendations],
+									'Is Normal': [recommendations[var]['is_normal'] for var in recommendations]
+								})
+
+								# Filter to show only variables needing transformation
+								transform_vars = rec_df[rec_df['Recommendation'] != 'none']
+
+								if not transform_vars.empty:
+									st.subheader("Recommended Transformations")
+									st.dataframe(transform_vars.style.format({
+										'Skewness': '{:.3f}'
+									}))
+
+									# Display transformation counts
+									counts = summary.get('recommendation_counts', {})
+
+									if counts:
+										# Create a DataFrame for display
+										counts_df = pd.DataFrame({
+											'Transformation': list(counts.keys()),
+											'Count': list(counts.values())
+										}).sort_values('Count', ascending=False)
+
+										# Create a pie chart
+										fig = px.pie(
+											counts_df,
+											values='Count',
+											names='Transformation',
+											title='Recommendation Distribution',
+											color_discrete_sequence=px.colors.qualitative.Set3
+										)
+
+										st.plotly_chart(fig, use_container_width=True)
+
+									# Apply transformations
+									if st.button("Apply Recommended Transformations"):
+										with st.spinner("Applying transformations..."):
+											# Get transformations to apply
+											transformations_to_apply = {
+												var: rec['recommendation']
+												for var, rec in recommendations.items()
+												if rec['recommendation'] != 'none'
+											}
+
+											# Apply transformations
+											transformed_data = self.data_quality_enhancer.apply_transformations(
+												transformations=transformations_to_apply
+											)
+
+											# Update session state
+											st.session_state.processed_data = transformed_data
+
+											# Update pipeline results
+											applied = self.data_quality_enhancer.results['transformations'].get('applied', {})
+
+											if 'details' in applied:
+												st.session_state.pipeline_results['data_quality']['transformations']['applied'] = {
+													'variables': list(applied['details'].keys()),
+													'summary': applied.get('summary', {})
+												}
+
+											st.success(f"Successfully applied transformations to {len(transformations_to_apply)} variables.")
+								else:
+									st.success("No variables require transformation.")
+
+								# Select a variable to examine
+								st.subheader("Examine Transformation Effect")
+
+								selected_transform_var = st.selectbox(
+									"Select a variable to examine transformation",
+									options=[var for var in recommendations if recommendations[var]['recommendation'] != 'none'],
+									index=0 if transform_vars.shape[0] > 0 else None
+								)
+
+								if selected_transform_var:
+									# Get recommended transformation
+									transform_type = recommendations[selected_transform_var]['recommendation']
+
+									# Plot transformation effect
+									fig, _ = self.data_quality_enhancer.plot_distribution(
+										variable=selected_transform_var,
+										original=True,
+										transformed=True,
+										transformation_type=transform_type
+									)
+
+									st.pyplot(fig)
+							else:
+								st.info("No transformation recommendations available.")
+						except Exception as e:
+							st.error(f"Error recommending transformations: {e}")
+							logger.error(f"Transformation recommendation error: {e}", exc_info=True)
+			else:
+				st.warning("Data not available for transformations. Please complete previous steps first.")
+
+		with tabs[3]:  # Standardization
+			st.subheader("Variable Standardization")
+
+			st.markdown("""
+			Standardization rescales variables to have similar ranges, which is important for many machine learning
+			algorithms. This tool provides different standardization methods.
+			""")
+
+			# Standardization settings
+			if self.data_quality_enhancer is not None:
+				col1, col2 = st.columns(2)
+
+				with col1:
+					# Select method
+					method = st.selectbox(
+						"Select standardization method",
+						options=["zscore", "robust", "minmax"],
+						index=0,
+						format_func=lambda x: {
+							"zscore": "Z-Score (mean=0, std=1)",
+							"robust": "Robust (median=0, IQR=1)",
+							"minmax": "Min-Max Scaling (0-1)"
+						}.get(x, x)
+					)
+
+				with col2:
+					# Select variables to standardize
+					standardize_all = st.checkbox("Standardize all numeric variables", value=True)
+
+				# Select specific variables if not standardizing all
+				numeric_vars = self.data_quality_enhancer.numeric_vars
+
+				if not standardize_all:
+					selected_vars = st.multiselect(
+						"Select variables to standardize",
+						options=numeric_vars,
+						default=numeric_vars[:5] if len(numeric_vars) >= 5 else numeric_vars
+					)
+				else:
+					selected_vars = numeric_vars
+
+				# Standardize variables
+				if selected_vars and st.button("Standardize Variables"):
+					with st.spinner("Standardizing variables..."):
+						try:
+							# Standardize selected variables
+							standardized_data = self.data_quality_enhancer.standardize_variables(
+								variables=selected_vars,
+								method=method
+							)
+
+							# Store in pipeline results
+							if 'pipeline_results' not in st.session_state:
+								st.session_state.pipeline_results = {}
+
+							if 'data_quality' not in st.session_state.pipeline_results:
+								st.session_state.pipeline_results['data_quality'] = {}
+
+							st.session_state.pipeline_results['data_quality']['standardization'] = {
+								'method': method,
+								'variables': selected_vars
+							}
+
+							# Update session state
+							st.session_state.processed_data = standardized_data
+
+							st.success(f"Successfully standardized {len(selected_vars)} variables using {method} method.")
+
+							# Display before/after comparison for a variable
+							st.subheader("Before/After Standardization")
+
+							# Select a variable to examine
+							sample_var = st.selectbox(
+								"Select a variable to examine",
+								options=selected_vars,
+								index=0
+							)
+
+							if sample_var:
+								col1, col2 = st.columns(2)
+
+								with col1:
+									st.markdown("### Before Standardization")
+
+									# Original statistics
+									orig_data = self.data[sample_var].dropna()
+
+									st.metric("Mean", f"{orig_data.mean():.2f}")
+									st.metric("Median", f"{orig_data.median():.2f}")
+									st.metric("Std Dev", f"{orig_data.std():.2f}")
+									st.metric("Min", f"{orig_data.min():.2f}")
+									st.metric("Max", f"{orig_data.max():.2f}")
+
+									# Histogram before standardization
+									fig = px.histogram(
+										orig_data,
+										title=f'{sample_var} (Before)',
+										color_discrete_sequence=[COLOR_PALETTE['primary']]
+									)
+
+									st.plotly_chart(fig, use_container_width=True)
+
+								with col2:
+									st.markdown("### After Standardization")
+
+									# Standardized statistics
+									std_data = standardized_data[sample_var].dropna()
+
+									st.metric("Mean", f"{std_data.mean():.2f}")
+									st.metric("Median", f"{std_data.median():.2f}")
+									st.metric("Std Dev", f"{std_data.std():.2f}")
+									st.metric("Min", f"{std_data.min():.2f}")
+									st.metric("Max", f"{std_data.max():.2f}")
+
+									# Histogram after standardization
+									fig = px.histogram(
+										std_data,
+										title=f'{sample_var} (After {method})',
+										color_discrete_sequence=[COLOR_PALETTE['secondary']]
+									)
+
+									st.plotly_chart(fig, use_container_width=True)
+						except Exception as e:
+							st.error(f"Error standardizing variables: {e}")
+							logger.error(f"Standardization error: {e}", exc_info=True)
+			else:
+				st.warning("Data not available for standardization. Please complete previous steps first.")
+
+	def _render_treatment_groups(self):
+		"""Render treatment group analysis tools."""
+		st.header("Treatment Group Analysis")
+
+		# Get treatment groups if not already done
+		if self.treatment_groups is None:
+			self.treatment_groups = self.data_loader.get_treatment_groups()
+
+		# Tab navigation for treatment groups
+		tabs = st.tabs(["Group Overview", "Baseline Characteristics", "Outcome Comparison", "Group Balance"])
+
+		with tabs[0]:  # Group Overview
+			st.subheader("Treatment Group Overview")
+
+			if self.treatment_groups:
+				# Create a bar chart of treatment group sizes
+				treatment_sizes = {group: len(df) for group, df in self.treatment_groups.items()}
+
+				# Skip 'Experimental' since it's equivalent to 'tDCS + Meditation'
+				if 'Experimental' in treatment_sizes:
+					del treatment_sizes['Experimental']
+
+				# Focus on the 2x2 factorial design groups
+				factorial_groups = {
+					'Control (No tDCS, No Meditation)': treatment_sizes.get('Control (No tDCS, No Meditation)', 0),
+					'tDCS Only': treatment_sizes.get('tDCS Only', 0),
+					'Meditation Only': treatment_sizes.get('Meditation Only', 0),
+					'tDCS + Meditation': treatment_sizes.get('tDCS + Meditation', 0)
+				}
+
+				# Create a bar chart
+				fig = px.bar(
+					x=list(factorial_groups.keys()),
+					y=list(factorial_groups.values()),
+					color=list(factorial_groups.keys()),
+					color_discrete_map={
+						'Control (No tDCS, No Meditation)': TREATMENT_COLORS['Control (No tDCS, No Meditation)'],
+						'tDCS Only': TREATMENT_COLORS['tDCS Only'],
+						'Meditation Only': TREATMENT_COLORS['Meditation Only'],
+						'tDCS + Meditation': TREATMENT_COLORS['tDCS + Meditation']
+					},
+					labels={'x': 'Treatment Group', 'y': 'Number of Participants'},
+					title='Treatment Group Sizes'
+				)
+
+				fig.update_layout(showlegend=False)
+				st.plotly_chart(fig, use_container_width=True)
+
+				# 2x2 grid showing treatment groups
+				st.subheader("2×2 Factorial Design")
+
+				col1, col2, col3 = st.columns([1, 2, 1])
+
+				with col2:
+					# Create a heatmap
+					fig = px.imshow(
+						[[factorial_groups['Control (No tDCS, No Meditation)'], factorial_groups['tDCS Only']],
+						 [factorial_groups['Meditation Only'], factorial_groups['tDCS + Meditation']]],
+						x=['No tDCS', 'tDCS'],
+						y=['No Meditation', 'Meditation'],
+						color_continuous_scale='Blues',
+						labels=dict(x="tDCS Treatment", y="Meditation Treatment", color="Participants"),
+						text_auto=True
+					)
+
+					fig.update_layout(title='2×2 Factorial Design')
+					st.plotly_chart(fig, use_container_width=True)
+
+				# Group descriptions
+				st.subheader("Treatment Group Descriptions")
+
+				col1, col2 = st.columns(2)
+
+				with col1:
+					st.markdown("**Control Group (No tDCS, No Meditation)**")
+					st.markdown("Participants in this group received neither tDCS nor meditation intervention.")
+
+					st.markdown("**tDCS Only Group**")
+					st.markdown("Participants in this group received transcranial direct current stimulation (tDCS) without meditation intervention.")
+
+				with col2:
+					st.markdown("**Meditation Only Group**")
+					st.markdown("Participants in this group received meditation intervention without tDCS.")
+
+					st.markdown("**tDCS + Meditation Group**")
+					st.markdown("Participants in this group received both tDCS and meditation interventions.")
+			else:
+				st.warning("Treatment group data not available.")
+
+		with tabs[1]:  # Baseline Characteristics
+			st.subheader("Baseline Characteristics by Treatment Group")
+
+			if self.treatment_groups:
+				# Select variables to compare
+				st.markdown("### Select Variables")
+				st.markdown("Choose baseline characteristics to compare across treatment groups:")
+
+				# Get baseline variables
+				variable_categories = self.data_loader.get_variable_categories()
+
+				if variable_categories:
+					baseline_vars = variable_categories.get('baseline', [])
+					demographic_vars = variable_categories.get('demographic', [])
+
+					# Combine and remove duplicates
+					compare_vars = list(set(baseline_vars + demographic_vars))
+
+					# Add variables containing ".0" or "_0" as they're likely baseline
+					for var in self.data.columns:
+						if ".0" in var or "_0" in var:
+							compare_vars.append(var)
+
+					# Remove duplicates and sort
+					compare_vars = sorted(list(set(compare_vars)))
+				else:
+					# Default to variables with "0" in the name (likely baseline)
+					compare_vars = [var for var in self.data.columns if "0" in var]
+
+				selected_vars = st.multiselect(
+					"Select baseline variables to compare",
+					options=compare_vars,
+					default=[var for var in ['Age', 'History.Age', 'History.Gender', 'WOMAC.Pain.0', 'WOMAC.Total1.0', 'NRS.Average.Daily.0']
+							 if var in compare_vars][:5]
+				)
+
+				# Select groups to compare
+				groups_to_compare = st.multiselect(
+					"Select groups to compare",
+					options=list(self.treatment_groups.keys()),
+					default=[group for group in self.treatment_groups.keys()
+							if group not in ['Experimental']]  # Exclude 'Experimental' by default
+				)
+
+				# Compare baseline characteristics
+				if selected_vars and groups_to_compare and st.button("Compare Baseline Characteristics"):
+					with st.spinner("Analyzing baseline characteristics..."):
+						try:
+							# Create a DataFrame to store comparison results
+							comparison_data = []
+
+							for var in selected_vars:
+								var_data = {'Variable': var}
+
+								for group in groups_to_compare:
+									group_df = self.treatment_groups[group]
+
+									if var in group_df.columns:
+										# Check if numeric
+										if pd.api.types.is_numeric_dtype(group_df[var]):
+											# Calculate mean and std
+											mean = group_df[var].mean()
+											std = group_df[var].std()
+											var_data[group] = f"{mean:.2f} ± {std:.2f}"
+										else:
+											# For categorical, get most common value and percentage
+											value_counts = group_df[var].value_counts()
+											if not value_counts.empty:
+												top_value = value_counts.index[0]
+												top_count = value_counts.iloc[0]
+												pct = top_count / len(group_df) * 100
+												var_data[group] = f"{top_value} ({pct:.1f}%)"
+											else:
+												var_data[group] = "N/A"
+									else:
+										var_data[group] = "N/A"
+
+								comparison_data.append(var_data)
+
+							# Create a DataFrame
+							comparison_df = pd.DataFrame(comparison_data)
+
+							# Display the table
+							st.dataframe(comparison_df)
+
+							# Create visualizations for selected variables
+							st.subheader("Visualizations")
+
+							for var in selected_vars:
+								if var in self.data.columns:
+									# Check if numeric
+									if pd.api.types.is_numeric_dtype(self.data[var]):
+										# Create a box plot
+										var_data = []
+
+										for group in groups_to_compare:
+											group_df = self.treatment_groups[group]
+
+											if var in group_df.columns:
+												for value in group_df[var].dropna():
+													var_data.append({
+														'Group': group,
+														'Value': value
+													})
+
+										if var_data:
+											var_df = pd.DataFrame(var_data)
+
+											# Get variable description
+											description = self.data_loader.get_variable_description(var) or var
+
+											fig = px.box(
+												var_df,
+												x='Group',
+												y='Value',
+												color='Group',
+												title=f'{description} by Treatment Group',
+												color_discrete_map=TREATMENT_COLORS
+											)
+
+											st.plotly_chart(fig, use_container_width=True)
+									else:
+										# For categorical, create a stacked bar chart
+										var_data = []
+
+										for group in groups_to_compare:
+											group_df = self.treatment_groups[group]
+
+											if var in group_df.columns:
+												value_counts = group_df[var].value_counts(normalize=True)
+
+												for value, count in value_counts.items():
+													var_data.append({
+														'Group': group,
+														'Value': str(value),
+														'Percentage': count * 100
+													})
+
+										if var_data:
+											var_df = pd.DataFrame(var_data)
+
+											# Get variable description
+											description = self.data_loader.get_variable_description(var) or var
+
+											fig = px.bar(
+												var_df,
+												x='Group',
+												y='Percentage',
+												color='Value',
+												title=f'{description} by Treatment Group',
+												color_discrete_sequence=px.colors.qualitative.Set3
+											)
+
+											st.plotly_chart(fig, use_container_width=True)
+						except Exception as e:
+							st.error(f"Error comparing baseline characteristics: {e}")
+							logger.error(f"Baseline comparison error: {e}", exc_info=True)
+			else:
+				st.warning("Treatment group data not available.")
+
+		with tabs[2]:  # Outcome Comparison
+			st.subheader("Outcome Comparison Across Treatment Groups")
+
+			if self.treatment_groups:
+				# Select outcome variables
+				st.markdown("### Select Outcome Variables")
+				st.markdown("Choose outcome variables to compare across treatment groups:")
+
+				# Get outcome variables
+				variable_categories = self.data_loader.get_variable_categories()
+
+				if variable_categories:
+					outcome_vars = variable_categories.get('outcome', [])
+				else:
+					# Default to variables with "differ" or "change" in the name
+					outcome_vars = [var for var in self.data.columns if "differ" in var.lower() or "change" in var.lower()]
+
+				# Add variables with specific patterns that might indicate outcomes
+				for pattern in ['M1', 'M2', 'M3', '10', 'differ', 'Differ']:
+					for var in self.data.columns:
+						if pattern in var:
+							outcome_vars.append(var)
+
+				# Remove duplicates and sort
+				outcome_vars = sorted(list(set(outcome_vars)))
+
+				selected_outcomes = st.multiselect(
+					"Select outcome variables to compare",
+					options=outcome_vars,
+					default=[var for var in ['WOMAC.Pain.Differ', 'WOMAC.Total.differ', 'NRS.Average.differ']
+							 if var in outcome_vars][:3]
+				)
+
+				# Select groups to compare
+				groups_to_compare = st.multiselect(
+					"Select groups to compare",
+					options=list(self.treatment_groups.keys()),
+					default=[group for group in self.treatment_groups.keys()
+							if group not in ['Experimental']]  # Exclude 'Experimental' by default
+				)
+
+				# Compare outcomes
+				if selected_outcomes and groups_to_compare and st.button("Compare Outcomes"):
+					with st.spinner("Analyzing outcomes..."):
+						try:
+							# Create visualizations for selected outcomes
+							for var in selected_outcomes:
+								if var in self.data.columns:
+									# Check if numeric
+									if pd.api.types.is_numeric_dtype(self.data[var]):
+										# Create a box plot
+										var_data = []
+
+										for group in groups_to_compare:
+											group_df = self.treatment_groups[group]
+
+											if var in group_df.columns:
+												for value in group_df[var].dropna():
+													var_data.append({
+														'Group': group,
+														'Value': value
+													})
+
+										if var_data:
+											var_df = pd.DataFrame(var_data)
+
+											# Get variable description
+											description = self.data_loader.get_variable_description(var) or var
+
+											fig = px.box(
+												var_df,
+												x='Group',
+												y='Value',
+												color='Group',
+												title=f'{description} by Treatment Group',
+												color_discrete_map=TREATMENT_COLORS
+											)
+
+											st.plotly_chart(fig, use_container_width=True)
+
+											# Add statistics
+											st.subheader(f"Statistics for {var}")
+
+											stats_data = []
+											for group in groups_to_compare:
+												group_df = self.treatment_groups[group]
+
+												if var in group_df.columns:
+													values = group_df[var].dropna()
+
+													stats_data.append({
+														'Group': group,
+														'N': len(values),
+														'Mean': values.mean(),
+														'Median': values.median(),
+														'Std Dev': values.std(),
+														'Min': values.min(),
+														'Max': values.max()
+													})
+
+											stats_df = pd.DataFrame(stats_data)
+
+											st.dataframe(stats_df.style.format({
+												'Mean': '{:.2f}',
+												'Median': '{:.2f}',
+												'Std Dev': '{:.2f}',
+												'Min': '{:.2f}',
+												'Max': '{:.2f}'
+											}))
+
+											# Simple statistical test (ANOVA)
+											if len(groups_to_compare) > 1:
+												try:
+													from scipy import stats as scipy_stats
+
+													# Prepare data for ANOVA
+													anova_data = []
+													for group in groups_to_compare:
+														group_df = self.treatment_groups[group]
+														if var in group_df.columns:
+															values = group_df[var].dropna().tolist()
+															if values:
+																anova_data.append(values)
+
+													if len(anova_data) > 1 and all(len(data) > 0 for data in anova_data):
+														# Perform one-way ANOVA
+														f_stat, p_value = scipy_stats.f_oneway(*anova_data)
+
+														st.markdown(f"**One-way ANOVA:** F = {f_stat:.3f}, p-value = {p_value:.4f}")
+
+														if p_value < 0.05:
+															st.markdown("**Result:** There is a statistically significant difference between groups (p < 0.05).")
+														else:
+															st.markdown("**Result:** There is no statistically significant difference between groups (p ≥ 0.05).")
+												except Exception as e:
+													st.warning(f"Could not perform statistical test: {e}")
+									else:
+										st.warning(f"Variable {var} is not numeric and cannot be visualized as an outcome.")
+								else:
+									st.warning(f"Variable {var} not found in the dataset.")
+						except Exception as e:
+							st.error(f"Error comparing outcomes: {e}")
+							logger.error(f"Outcome comparison error: {e}", exc_info=True)
+			else:
+				st.warning("Treatment group data not available.")
+
+		with tabs[3]:  # Group Balance
+			st.subheader("Treatment Group Balance Assessment")
+
+			if self.treatment_groups:
+				st.markdown("""
+				Assessing balance between treatment groups is crucial in randomized controlled trials.
+				This tool helps evaluate if baseline characteristics are well-balanced across groups.
+				""")
+
+				# Select variables for balance assessment
+				st.markdown("### Select Variables")
+				st.markdown("Choose baseline characteristics to assess balance:")
+
+				# Get baseline variables (similar to baseline characteristics tab)
+				variable_categories = self.data_loader.get_variable_categories()
+
+				if variable_categories:
+					baseline_vars = variable_categories.get('baseline', [])
+					demographic_vars = variable_categories.get('demographic', [])
+
+					# Combine and remove duplicates
+					balance_vars = list(set(baseline_vars + demographic_vars))
+
+					# Add variables containing ".0" or "_0" as they're likely baseline
+					for var in self.data.columns:
+						if ".0" in var or "_0" in var:
+							balance_vars.append(var)
+
+					# Remove duplicates and sort
+					balance_vars = sorted(list(set(balance_vars)))
+				else:
+					# Default to variables with "0" in the name (likely baseline)
+					balance_vars = [var for var in self.data.columns if "0" in var]
+
+				selected_vars = st.multiselect(
+					"Select baseline variables to assess balance",
+					options=balance_vars,
+					default=[var for var in ['Age', 'History.Age', 'History.Gender', 'WOMAC.Pain.0', 'WOMAC.Total1.0', 'NRS.Average.Daily.0']
+							 if var in balance_vars][:5]
+				)
+
+				# Select groups to compare
+				groups_to_compare = st.multiselect(
+					"Select groups to compare",
+					options=list(self.treatment_groups.keys()),
+					default=[group for group in self.treatment_groups.keys()
+							if group not in ['Experimental']]  # Exclude 'Experimental' by default
+				)
+
+				# Assess balance
+				if selected_vars and groups_to_compare and st.button("Assess Group Balance"):
+					with st.spinner("Assessing group balance..."):
+						try:
+							# Calculate standardized mean differences
+							balance_results = []
+
+							for var in selected_vars:
+								if var in self.data.columns and pd.api.types.is_numeric_dtype(self.data[var]):
+									var_data = {'Variable': var}
+
+									# Get reference group (first group)
+									ref_group = groups_to_compare[0]
+									ref_values = self.treatment_groups[ref_group][var].dropna()
+
+									if len(ref_values) > 0:
+										ref_mean = ref_values.mean()
+										ref_std = ref_values.std()
+
+										var_data['Reference Group'] = ref_group
+										var_data['Reference Mean'] = ref_mean
+										var_data['Reference Std'] = ref_std
+
+										# Calculate SMD for each comparison group
+										for group in groups_to_compare[1:]:
+											group_values = self.treatment_groups[group][var].dropna()
+
+											if len(group_values) > 0:
+												group_mean = group_values.mean()
+												group_std = group_values.std()
+
+												# Calculate pooled standard deviation
+												n1 = len(ref_values)
+												n2 = len(group_values)
+												pooled_std = np.sqrt(((n1 - 1) * ref_std**2 + (n2 - 1) * group_std**2) / (n1 + n2 - 2))
+
+												# Calculate standardized mean difference
+												if pooled_std > 0:
+													smd = abs((group_mean - ref_mean) / pooled_std)
+												else:
+													smd = 0
+
+												var_data[f'SMD vs {group}'] = smd
+											else:
+												var_data[f'SMD vs {group}'] = np.nan
+
+										balance_results.append(var_data)
+
+							if balance_results:
+								# Create a DataFrame
+								balance_df = pd.DataFrame(balance_results)
+
+								# Display the table
+								st.dataframe(balance_df.style.format({
+									'Reference Mean': '{:.2f}',
+									'Reference Std': '{:.2f}',
+									**{f'SMD vs {group}': '{:.3f}' for group in groups_to_compare[1:]}
+								}))
+
+								# Visualize SMDs
+								smd_data = []
+
+								for _, row in balance_df.iterrows():
+									var = row['Variable']
+
+									for group in groups_to_compare[1:]:
+										col_name = f'SMD vs {group}'
+
+										if col_name in row and not pd.isna(row[col_name]):
+											smd_data.append({
+												'Variable': var,
+												'Group': group,
+												'SMD': row[col_name]
+											})
+
+								if smd_data:
+									smd_df = pd.DataFrame(smd_data)
+
+									# Create a heatmap
+									fig = px.imshow(
+										smd_df.pivot(index='Variable', columns='Group', values='SMD'),
+										color_continuous_scale='RdYlGn_r',
+										title='Standardized Mean Differences',
+										labels=dict(x="Comparison Group", y="Variable", color="SMD")
+									)
+
+									st.plotly_chart(fig, use_container_width=True)
+
+									# Create a categorical assessment
+									st.subheader("Balance Assessment")
+
+									balance_assessment = []
+
+									for _, row in smd_df.iterrows():
+										smd = row['SMD']
+
+										if smd < 0.1:
+											balance = "Good balance"
+											color = "green"
+										elif smd < 0.2:
+											balance = "Acceptable balance"
+											color = "orange"
+										else:
+											balance = "Poor balance"
+											color = "red"
+
+										balance_assessment.append({
+											'Variable': row['Variable'],
+											'Group': row['Group'],
+											'SMD': smd,
+											'Assessment': balance,
+											'Color': color
+										})
+
+									if balance_assessment:
+										assessment_df = pd.DataFrame(balance_assessment)
+
+										# Display as a styled table
+										st.dataframe(assessment_df.style.format({
+											'SMD': '{:.3f}'
+										}).applymap(lambda _: 'color: green', subset=['Assessment']))
+
+										# Summary
+										good_count = len(assessment_df[assessment_df['Assessment'] == "Good balance"])
+										acceptable_count = len(assessment_df[assessment_df['Assessment'] == "Acceptable balance"])
+										poor_count = len(assessment_df[assessment_df['Assessment'] == "Poor balance"])
+
+										st.markdown("### Balance Summary")
+
+										col1, col2, col3 = st.columns(3)
+
+										col1.metric("Good Balance (SMD < 0.1)", good_count)
+										col2.metric("Acceptable Balance (SMD < 0.2)", acceptable_count)
+										col3.metric("Poor Balance (SMD ≥ 0.2)", poor_count)
+
+										# Overall assessment
+										st.subheader("Overall Balance Assessment")
+
+										if poor_count == 0 and acceptable_count <= len(assessment_df) * 0.2:
+											st.success("Overall balance between groups is good.")
+										elif poor_count <= len(assessment_df) * 0.2:
+											st.warning("Overall balance between groups is acceptable, but some variables show differences.")
+										else:
+											st.error("Overall balance between groups is poor. Consider adjusting for these variables in your analysis.")
+							else:
+								st.warning("No numeric variables selected for balance assessment.")
+						except Exception as e:
+							st.error(f"Error assessing group balance: {e}")
+							logger.error(f"Group balance assessment error: {e}", exc_info=True)
+			else:
+				st.warning("Treatment group data not available.")
+
+	def _render_pipeline_export(self):
+		"""Render pipeline results and data export tools."""
+		st.header("Pipeline & Export")
+
+		# Check if processed data is available
+		if st.session_state.processed_data is not None:
+			# Tab navigation for pipeline and export
+			tabs = st.tabs(["Pipeline Summary", "Data Export", "Pipeline Report", "Next Steps"])
+
+			with tabs[0]:  # Pipeline Summary
+				st.subheader("Data Preparation Pipeline Summary")
+
+				# Get pipeline results
+				pipeline_results = st.session_state.pipeline_results
+
+				if pipeline_results:
+					# Create a timeline of completed steps
+					steps = []
+
+					if 'imputation' in pipeline_results:
+						imputation = pipeline_results['imputation']
+						steps.append({
+							'step': 'Imputation',
+							'status': 'Completed',
+							'details': f"Method: {imputation.get('method', 'unknown')}, Variables: {len(self.data.columns)}"
+						})
+					else:
+						steps.append({
+							'step': 'Imputation',
+							'status': 'Not Completed',
+							'details': "Missing data not yet imputed"
+						})
+
+					if 'variable_screening' in pipeline_results:
+						screening = pipeline_results['variable_screening']
+
+						if 'summary' in screening:
+							summary = screening['summary']
+							steps.append({
+								'step': 'Variable Screening',
+								'status': 'Completed',
+								'details': f"Variables reduced from {summary.get('total_variables', 0)} to {summary.get('recommended_variables', 0)}"
+							})
+						else:
+							steps.append({
+								'step': 'Variable Screening',
+								'status': 'Completed',
+								'details': "Variables screened, but no summary available"
+							})
+					else:
+						steps.append({
+							'step': 'Variable Screening',
+							'status': 'Not Completed',
+							'details': "Variables not yet screened"
+						})
+
+					if 'dimensionality_reduction' in pipeline_results:
+						dim_reduction = pipeline_results['dimensionality_reduction']
+						steps.append({
+							'step': 'Dimensionality Reduction',
+							'status': 'Completed',
+							'details': f"Method: {dim_reduction.get('method', 'unknown')}, Components: {dim_reduction.get('n_components', 0)}"
+						})
+					else:
+						steps.append({
+							'step': 'Dimensionality Reduction',
+							'status': 'Not Completed',
+							'details': "Dimensionality not yet reduced"
+						})
+
+					if 'data_quality' in pipeline_results:
+						data_quality = pipeline_results['data_quality']
+						quality_steps = []
+
+						if 'outliers' in data_quality:
+							quality_steps.append("Outlier Detection")
+
+						if 'distributions' in data_quality:
+							quality_steps.append("Distribution Analysis")
+
+						if 'transformations' in data_quality:
+							quality_steps.append("Transformations")
+
+						if 'standardization' in data_quality:
+							quality_steps.append("Standardization")
+
+						if quality_steps:
+							steps.append({
+								'step': 'Data Quality Enhancement',
+								'status': 'Completed',
+								'details': f"Completed steps: {', '.join(quality_steps)}"
+							})
+						else:
+							steps.append({
+								'step': 'Data Quality Enhancement',
+								'status': 'Not Completed',
+								'details': "Data quality not yet enhanced"
+							})
+					else:
+						steps.append({
+							'step': 'Data Quality Enhancement',
+							'status': 'Not Completed',
+							'details': "Data quality not yet enhanced"
+						})
+
+					# Display the timeline
+					for i, step in enumerate(steps):
+						col1, col2 = st.columns([1, 3])
+
+						with col1:
+							if step['status'] == 'Completed':
+								st.success(step['step'])
+							else:
+								st.warning(step['step'])
+
+						with col2:
+							st.markdown(f"**Status:** {step['status']}")
+							st.markdown(f"**Details:** {step['details']}")
+
+						if i < len(steps) - 1:
+							st.markdown("---")
+
+					# Dataset transformation summary
+					st.subheader("Dataset Transformation Summary")
+
+					col1, col2, col3 = st.columns(3)
+
+					with col1:
+						# Original dataset
+						original_rows = len(self.data)
+						original_cols = len(self.data.columns)
+
+						st.metric("Original Dataset", f"{original_rows} × {original_cols}")
+
+					with col2:
+						# Current processed dataset
+						current_rows = len(st.session_state.processed_data)
+						current_cols = len(st.session_state.processed_data.columns)
+
+						st.metric("Current Dataset", f"{current_rows} × {current_cols}")
+
+					with col3:
+						# Dimensionality reduction
+						dim_reduction = (1 - current_cols / original_cols) * 100
+
+						st.metric("Dimensionality Reduction", f"{dim_reduction:.1f}%")
+
+					# Data preview
+					st.subheader("Processed Data Preview")
+					st.dataframe(st.session_state.processed_data.head(10))
+				else:
+					st.warning("No pipeline steps have been completed yet.")
+
+			with tabs[1]:  # Data Export
+				st.subheader("Export Processed Data")
+
+				# Export options
+				export_format = st.radio(
+					"Export format",
+					options=["CSV", "Excel"],
+					index=0
+				)
+
+				# Include metadata
+				include_metadata = st.checkbox("Include pipeline metadata", value=True)
+
+				# Export data
+				if st.button("Export Data"):
+					with st.spinner("Preparing data for export..."):
+						try:
+							if export_format == "CSV":
+								# Export to CSV
+								csv = st.session_state.processed_data.to_csv(index=False)
+								b64 = base64.b64encode(csv.encode()).decode()
+
+								# Create download link
+								href = f'<a href="data:file/csv;base64,{b64}" download="te_koa_processed_data.csv">Download Processed Data (CSV)</a>'
+								st.markdown(href, unsafe_allow_html=True)
+
+								# Export metadata if requested
+								if include_metadata and pipeline_results:
+									# Convert pipeline results to JSON
+									import json
+
+									# Ensure all numpy arrays and other non-serializable objects are converted
+									def convert_for_json(obj):
+										if isinstance(obj, (np.ndarray, list)):
+											return [convert_for_json(item) for item in obj]
+										elif isinstance(obj, dict):
+											return {key: convert_for_json(value) for key, value in obj.items()}
+										elif isinstance(obj, (np.int64, np.int32, np.float64, np.float32)):
+											return float(obj) if np.issubdtype(type(obj), np.floating) else int(obj)
+										else:
+											return obj
+
+									# Convert pipeline results
+									json_results = json.dumps(convert_for_json(pipeline_results), indent=2)
+									b64_meta = base64.b64encode(json_results.encode()).decode()
+
+									# Create download link for metadata
+									href_meta = f'<a href="data:file/json;base64,{b64_meta}" download="te_koa_pipeline_metadata.json">Download Pipeline Metadata (JSON)</a>'
+									st.markdown(href_meta, unsafe_allow_html=True)
+							else:  # Excel
+								# Export to Excel
+								buffer = io.BytesIO()
+
+								with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+									st.session_state.processed_data.to_excel(writer, sheet_name='Processed Data', index=False)
+
+									# Add metadata if requested
+									if include_metadata and pipeline_results:
+										# Create metadata sheet
+										metadata = pd.DataFrame([
+											{'Step': 'Imputation', 'Details': str(pipeline_results.get('imputation', 'Not completed'))},
+											{'Step': 'Variable Screening', 'Details': str(pipeline_results.get('variable_screening', {}).get('summary', 'Not completed'))},
+											{'Step': 'Dimensionality Reduction', 'Details': str(pipeline_results.get('dimensionality_reduction', 'Not completed'))},
+											{'Step': 'Data Quality', 'Details': str(pipeline_results.get('data_quality', 'Not completed'))}
+										])
+
+										metadata.to_excel(writer, sheet_name='Pipeline Metadata', index=False)
+
+								b64 = base64.b64encode(buffer.getvalue()).decode()
+
+								# Create download link
+								href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="te_koa_processed_data.xlsx">Download Processed Data (Excel)</a>'
+								st.markdown(href, unsafe_allow_html=True)
+
+							st.success("Data export prepared. Click the link above to download.")
+						except Exception as e:
+							st.error(f"Error exporting data: {e}")
+							logger.error(f"Data export error: {e}", exc_info=True)
+
+			with tabs[2]:  # Pipeline Report
+				st.subheader("Data Preparation Pipeline Report")
+
+				# Generate a comprehensive report
+				if pipeline_results:
+					st.markdown("""
+					This report summarizes the data preparation pipeline applied to the TE-KOA dataset,
+					including all transformations and their effects on the data.
+					""")
+
+					# Report sections
+					sections = []
+
+					# 1. Data Overview
+					sections.append({
+						'title': 'Data Overview',
+						'content': f"""
+						* Original dataset: {len(self.data)} participants, {len(self.data.columns)} variables
+						* Current dataset: {len(st.session_state.processed_data)} participants, {len(st.session_state.processed_data.columns)} variables
+						* Dimensionality reduction: {(1 - len(st.session_state.processed_data.columns) / len(self.data.columns)) * 100:.1f}%
+						"""
+					})
+
+					# 2. Imputation
+					if 'imputation' in pipeline_results:
+						imputation = pipeline_results['imputation']
+
+						sections.append({
+							'title': 'Missing Data & Imputation',
+							'content': f"""
+							* Imputation method: {imputation.get('method', 'unknown')}
+							* KNN neighbors (if applicable): {imputation.get('knn_neighbors', 'N/A')}
+							* Original missing values: {imputation.get('original_missing', 'N/A')}
+							* Remaining missing values: {imputation.get('remaining_missing', 'N/A')}
+							* Excluded variables: {len(imputation.get('cols_excluded', []))}
+							"""
+						})
+
+					# 3. Variable Screening
+					if 'variable_screening' in pipeline_results:
+						screening = pipeline_results['variable_screening']
+
+						if 'summary' in screening:
+							summary = screening['summary']
+
+							sections.append({
+								'title': 'Variable Screening',
+								'content': f"""
+								* Total variables analyzed: {summary.get('total_variables', 0)}
+								* Near-zero variance variables: {summary.get('near_zero_variables', 0)}
+								* Highly correlated pairs: {summary.get('highly_correlated_pairs', 0)}
+								* High VIF variables: {summary.get('high_vif_variables', 0)}
+								* Force-included variables: {summary.get('force_included_variables', 0)}
+								* Recommended variables: {summary.get('recommended_variables', 0)}
+								"""
+							})
+
+					# 4. Dimensionality Reduction
+					if 'dimensionality_reduction' in pipeline_results:
+						dim_reduction = pipeline_results['dimensionality_reduction']
+
+						optimal_components = pipeline_results.get('optimal_components', {})
+
+						sections.append({
+							'title': 'Dimensionality Reduction',
+							'content': f"""
+							* Method: {dim_reduction.get('method', 'unknown')}
+							* Number of components: {dim_reduction.get('n_components', 0)}
+							* Variables analyzed: {len(dim_reduction.get('variables', []))}
+							* Optimal components: {optimal_components.get('optimal_number', 'N/A')}
+							* Variance threshold: {optimal_components.get('variance_threshold', 0) * 100:.0f}%
+							* Transformed data shape: {dim_reduction.get('transformed_data_shape', 'N/A')}
+							"""
+						})
+
+					# 5. Data Quality Enhancement
+					if 'data_quality' in pipeline_results:
+						data_quality = pipeline_results['data_quality']
+
+						quality_content = ""
+
+						if 'outliers' in data_quality:
+							outliers = data_quality['outliers']
+
+							quality_content += f"""
+							**Outlier Detection:**
+							* Method: {outliers.get('method', 'unknown')}
+							* Threshold: {outliers.get('threshold', 'N/A')}
+							* Variables analyzed: {len(outliers.get('variables', []))}
+							* Total outliers detected: {outliers.get('summary', {}).get('total_outliers_detected', 0)}
+
+							"""
+
+						if 'distributions' in data_quality:
+							distributions = data_quality['distributions']
+
+							quality_content += f"""
+							**Distribution Analysis:**
+							* Variables analyzed: {distributions.get('summary', {}).get('variables_analyzed', 0)}
+							* Normal variables: {distributions.get('summary', {}).get('normal_variables', 0)}
+							* Skewed variables: {distributions.get('summary', {}).get('skewed_variables', 0)}
+							* Highly skewed variables: {distributions.get('summary', {}).get('highly_skewed_variables', 0)}
+
+							"""
+
+						if 'transformations' in data_quality:
+							transformations = data_quality['transformations']
+
+							quality_content += f"""
+							**Variable Transformations:**
+							* Variables analyzed: {transformations.get('summary', {}).get('variables_analyzed', 0)}
+							* Variables needing transformation: {transformations.get('summary', {}).get('variables_needing_transformation', 0)}
+
+							"""
+
+							if 'applied' in transformations:
+								applied = transformations['applied']
+
+								quality_content += f"""
+								**Applied Transformations:**
+								* Variables transformed: {applied.get('summary', {}).get('variables_transformed', 0)}
+								* Log transformations: {applied.get('summary', {}).get('transformation_counts', {}).get('log', 0)}
+								* Square root transformations: {applied.get('summary', {}).get('transformation_counts', {}).get('sqrt', 0)}
+								* Square transformations: {applied.get('summary', {}).get('transformation_counts', {}).get('square', 0)}
+								* Yeo-Johnson transformations: {applied.get('summary', {}).get('transformation_counts', {}).get('yeo-johnson', 0)}
+
+								"""
+
+						if 'standardization' in data_quality:
+							standardization = data_quality['standardization']
+
+							quality_content += f"""
+							**Variable Standardization:**
+							* Method: {standardization.get('method', 'unknown')}
+							* Variables standardized: {len(standardization.get('variables', []))}
+							"""
+
+						if quality_content:
+							sections.append({
+								'title': 'Data Quality Enhancement',
+								'content': quality_content
+							})
+
+					# Display each section
+					for section in sections:
+						st.markdown(f"### {section['title']}")
+						st.markdown(section['content'])
+						st.markdown("---")
+
+					# Download report
+					if st.button("Generate Downloadable Report"):
+						try:
+							# Create a full report in Markdown format
+							report = f"# TE-KOA Data Preparation Pipeline Report\n\n"
+							report += f"*Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}*\n\n"
+
+							for section in sections:
+								report += f"## {section['title']}\n\n"
+								report += section['content'].strip() + "\n\n"
+
+							# Add a summary table of processed data
+							if not st.session_state.processed_data.empty:
+								report += "## Processed Data Summary\n\n"
+
+								# Convert DataFrame description to Markdown
+								desc = st.session_state.processed_data.describe().to_markdown()
+								report += desc + "\n\n"
+
+							# Encode as base64 for download
+							b64 = base64.b64encode(report.encode()).decode()
+
+							# Create download link
+							href = f'<a href="data:text/markdown;base64,{b64}" download="te_koa_pipeline_report.md">Download Pipeline Report (Markdown)</a>'
+							st.markdown(href, unsafe_allow_html=True)
+
+							st.success("Report generated. Click the link above to download.")
+						except Exception as e:
+							st.error(f"Error generating report: {e}")
+							logger.error(f"Report generation error: {e}", exc_info=True)
+				else:
+					st.warning("No pipeline steps have been completed yet.")
+
+			with tabs[3]:  # Next Steps
+				st.subheader("Next Steps")
+
+				st.markdown("""
+				### Phase II: Phenotype Discovery (Clustering)
+
+				The next step in the project is to use the prepared dataset for phenotype discovery through clustering:
+
+				1. **Clustering Pipeline**
+				   - K-means clustering (fast, simple)
+				   - PAM/medoids (robust to outliers)
+				   - Gaussian Mixture Model (soft membership)
+
+				2. **Validation Metrics**
+				   - Silhouette scores and gap statistic
+				   - Bootstrap stability assessment
+				   - Minimum cluster size rules
+
+				3. **Phenotype Characterization**
+				   - Statistical comparisons between phenotypes
+				   - Visualization with radar charts and heatmaps
+				   - Clinical interpretation and naming
+
+				### Phase III: Treatment Effect Heterogeneity Analysis
+
+				The final phase will analyze how each phenotype responds to different treatments:
+
+				1. **Linear Mixed Models**
+				   - Main effects and interactions with phenotypes
+
+				2. **Causal Machine Learning**
+				   - Causal Forest for conditional treatment effects
+				   - Bayesian Additive Regression Trees
+
+				3. **Quality Assessment**
+				   - Policy value evaluation
+				   - Calibration of predictions
+				   - Cluster-level treatment effect differences
+				""")
+
+				# Add button to continue to Phase II (future development)
+				st.button("Proceed to Phase II (Coming Soon)", disabled=True)
+		else:
+			st.warning("No processed data available. Please complete at least one pipeline step first.")
 
 
 if __name__ == "__main__":
-    main()
+	# Create and render the dashboard
+	dashboard = Dashboard()
+	dashboard.render()

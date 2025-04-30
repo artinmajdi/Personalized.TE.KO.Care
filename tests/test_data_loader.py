@@ -44,7 +44,7 @@ class TestDataLoader(TestCase):
         excel_path = self.data_dir / "test_koa_data.xlsx"
 
         with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-            # Create sheet1 with sample patient data
+            # Create Sheet1 with sample patient data
             data = pd.DataFrame({
                 'PatientID': range(1, 11),
                 'Age': [65, 70, 58, 62, 75, 68, 59, 71, 63, 67],
@@ -61,8 +61,8 @@ class TestDataLoader(TestCase):
             data.loc[0, 'WOMAC_pain_6m'] = np.nan
             data.loc[3, 'WOMAC_function_6m'] = np.nan
 
-            # Save to sheet1
-            data.to_excel(writer, sheet_name='sheet1', index=False)
+            # Save to Sheet1
+            data.to_excel(writer, sheet_name='Sheet1', index=False)
 
             # Create dictionary sheet with variable descriptions
             dictionary = pd.DataFrame({

@@ -51,7 +51,7 @@ class DataLoader:
         self.missing_data_report = None
         self.variable_categories = None
 
-    def load_data(self, sheet_name: str = "sheet1", dictionary_sheet: str = "dictionary", **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def load_data(self, sheet_name: str = "Sheet1", dictionary_sheet: str = "dictionary", **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Load the Knee Osteoarthritis dataset and data dictionary.
 
