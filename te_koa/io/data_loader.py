@@ -211,23 +211,23 @@ class DataLoader:
             med_col = 'Medication'
 
         # Split into treatment groups
-        try:
-            groups = {
-                'Control': self.data[(self.data[tdcs_col] == 0) & (self.data[med_col] == 0)],
-                'tDCS Only': self.data[(self.data[tdcs_col] == 1) & (self.data[med_col] == 0)],
-                'Medication Only': self.data[(self.data[tdcs_col] == 0) & (self.data[med_col] == 1)],
-                'tDCS + Medication': self.data[(self.data[tdcs_col] == 1) & (self.data[med_col] == 1)]
-            }
+        # try:
+        groups = {
+            'Control'          : self.data[(self.data[tdcs_col] == 0) & (self.data[med_col] == 0)],
+            'tDCS Only'        : self.data[(self.data[tdcs_col] == 1) & (self.data[med_col] == 0)],
+            'Medication Only'  : self.data[(self.data[tdcs_col] == 0) & (self.data[med_col] == 1)],
+            'tDCS + Medication': self.data[(self.data[tdcs_col] == 1) & (self.data[med_col] == 1)]
+        }
 
-            # Log the group sizes
-            for group, df in groups.items():
-                logger.info(f"{group}: {len(df)} patients")
+        # Log the group sizes
+        for group, df in groups.items():
+            logger.info(f"{group}: {len(df)} patients")
 
-            return groups
+        return groups
 
-        except Exception as e:
-            logger.error(f"Error creating treatment groups: {e}")
-            return None
+        # except Exception as e:
+        #     logger.error(f"Error creating treatment groups: {e}")
+        #     return None
 
     def get_variable_description(self, variable_name: str) -> str:
         """
