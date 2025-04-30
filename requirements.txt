@@ -21,3 +21,6 @@ shap
 scikit-learn
 pytest
 pytest-mock
+statsmodels
+scipy
+prince

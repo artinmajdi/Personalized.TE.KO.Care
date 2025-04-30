@@ -23,8 +23,8 @@ fi
 
 # Prompt user to choose between Docker and directly running the app
 echo "Please choose how you would like to run the dashboard:"
-echo -e "${BLUE}1)${NC} Run using Docker (recommended for production use)"
-echo -e "${BLUE}2)${NC} Run directly with local environment (recommended for development)"
+echo -e "${BLUE}1)${NC} Docker (recommended for production use)"
+echo -e "${BLUE}2)${NC} Local env (recommended for development)"
 echo ""
 
 read -p "Enter your choice (1/2): " choice
