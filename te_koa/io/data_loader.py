@@ -5,6 +5,7 @@ This module provides functionality for loading and preprocessing the Knee Osteoa
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -119,12 +120,7 @@ class DataLoader:
 
         return self.missing_data_report
 
-    def impute_missing_values(
-        self,
-        method: str = 'knn',
-        knn_neighbors: int = 5,
-        cols_to_exclude: List[str] = None
-    ) -> pd.DataFrame:
+    def impute_missing_values( self, method: str = 'knn', knn_neighbors: int = 5, cols_to_exclude: List[str] = None ) -> pd.DataFrame:
         """
         Impute missing values in the dataset.
 
@@ -165,14 +161,7 @@ class DataLoader:
             imputed_scaled_data = imputer.fit_transform(scaled_data)
 
             # Create a DataFrame with the imputed values
-            imputed_df = pd.DataFrame(imputed_scaled_data, columns=cols_to_impute)
-
-            # Inverse transform to get back the original scale
-            imputed_df = pd.DataFrame(
-                scaler.inverse_transform(imputed_df),
-                columns=cols_to_impute,
-                index=imputed_data.index
-            )
+            imputed_df = pd.DataFrame( scaler.inverse_transform(imputed_scaled_data), columns=cols_to_impute, index=imputed_data.index )
 
             # Update the imputed columns
             for col in cols_to_impute:
