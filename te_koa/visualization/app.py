@@ -2133,3 +2133,26 @@ class Dashboard:
 						# Store in session state
 						if 'pipeline_results' not in st.session_state:
 							st
+
+
+
+
+def main() -> None:
+    """Main entry point for the dashboard application."""
+    try:
+        # Configure logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+
+        # Create and run dashboard
+        dashboard = Dashboard()
+        dashboard.render()
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
+        logger.error(f"Dashboard error: {e}", exc_info=True)
+
+
+if __name__ == "__main__":
+    main()

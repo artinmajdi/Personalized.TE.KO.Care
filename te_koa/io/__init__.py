@@ -12,5 +12,5 @@ from .analyze_excel_file import analyze_excel_file
 __all__ = [
     'DataLoader',
     'analyze_dictionary',
-    'analyze_excel_file'
+    'analyze_excel_file',
 ]

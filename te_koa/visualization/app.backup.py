@@ -21,9 +21,9 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from te_koa.io.data_loader import DataLoader
-from te_koa.io.variable_screener import VariableScreener
-from te_koa.io.dimensionality_reducer import DimensionalityReducer
-from te_koa.io.data_quality_enhancer import DataQualityEnhancer
+from te_koa.utils.variable_screener import VariableScreener
+from te_koa.utils.dimensionality_reducer import DimensionalityReducer
+from te_koa.utils.data_quality_enhancer import DataQualityEnhancer
 
 # Set up logging
 logger = logging.getLogger(__name__)
