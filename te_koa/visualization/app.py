@@ -55,12 +55,12 @@ class Dashboard:
 
         # Create tabs for different views
         tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "Overview", 
-            "Data Explorer", 
-            "Dictionary", 
-            "Visualizations", 
-            "Missing Data & Imputation", 
-            "Treatment Groups", 
+            "Overview",
+            "Data Explorer",
+            "Dictionary",
+            "Visualizations",
+            "Missing Data & Imputation",
+            "Treatment Groups",
             "Save Processed Data"
         ])
 
@@ -75,13 +75,13 @@ class Dashboard:
 
         with tab4:
             self._render_visualizations()
-            
+
         with tab5:
             self._render_missing_data_imputation()
-            
+
         with tab6:
             self._render_treatment_groups()
-            
+
         with tab7:
             self._render_save_processed_data()
 
@@ -219,7 +219,7 @@ class Dashboard:
     def _render_missing_data_imputation(self):
         """Render missing data analysis and imputation tools."""
         st.header("Missing Data & Imputation")
-        
+
         # Display missing data report
         st.subheader("Missing Data Report")
         if self.missing_data_report is not None:
@@ -231,10 +231,10 @@ class Dashboard:
                 st.success("No missing values found in the dataset!")
         else:
             st.warning("Missing data report not available.")
-        
+
         # Imputation options
         st.subheader("Impute Missing Values")
-        
+
         col1, col2 = st.columns(2)
         with col1:
             imputation_method = st.selectbox(
@@ -242,20 +242,20 @@ class Dashboard:
                 options=["knn", "mean", "median"],
                 index=0
             )
-        
+
         with col2:
             if imputation_method == "knn":
                 knn_neighbors = st.slider("Number of neighbors for KNN", 1, 20, 5)
             else:
                 knn_neighbors = 5  # Default value, not used for mean/median
-        
+
         # Column exclusion
         st.subheader("Exclude Columns from Imputation")
         cols_to_exclude = st.multiselect(
             "Select columns to exclude from imputation",
             options=list(self.data.columns)
         )
-        
+
         # Impute button
         if st.button("Impute Missing Values"):
             with st.spinner("Imputing missing values..."):
@@ -266,22 +266,22 @@ class Dashboard:
                         cols_to_exclude=cols_to_exclude
                     )
                     st.success("Successfully imputed missing values!")
-                    
+
                     # Show comparison of before/after
                     if self.imputed_data is not None:
                         st.subheader("Before/After Imputation Comparison")
                         # Select a column with missing values to compare
-                        missing_cols = [col for col in self.data.columns 
-                                       if col not in cols_to_exclude and 
+                        missing_cols = [col for col in self.data.columns
+                                       if col not in cols_to_exclude and
                                        self.data[col].isnull().sum() > 0 and
                                        pd.api.types.is_numeric_dtype(self.data[col])]
-                        
+
                         if missing_cols:
                             compare_col = st.selectbox(
                                 "Select column to compare",
                                 options=missing_cols
                             )
-                            
+
                             col1, col2 = st.columns(2)
                             with col1:
                                 st.write("Before Imputation")
@@ -289,22 +289,22 @@ class Dashboard:
                                 sns.histplot(self.data[compare_col].dropna(), kde=True, ax=ax)
                                 ax.set_title(f"{compare_col} (Before)")
                                 st.pyplot(fig)
-                                
+
                                 st.metric(
-                                    "Missing Values", 
+                                    "Missing Values",
                                     self.data[compare_col].isnull().sum(),
                                     f"{(self.data[compare_col].isnull().sum() / len(self.data)) * 100:.2f}%"
                                 )
-                                
+
                             with col2:
                                 st.write("After Imputation")
                                 fig, ax = plt.subplots(figsize=(6, 4))
                                 sns.histplot(self.imputed_data[compare_col], kde=True, ax=ax)
                                 ax.set_title(f"{compare_col} (After)")
                                 st.pyplot(fig)
-                                
+
                                 st.metric(
-                                    "Missing Values", 
+                                    "Missing Values",
                                     self.imputed_data[compare_col].isnull().sum(),
                                     f"{(self.imputed_data[compare_col].isnull().sum() / len(self.imputed_data)) * 100:.2f}%"
                                 )
@@ -313,52 +313,50 @@ class Dashboard:
                 except Exception as e:
                     st.error(f"Error during imputation: {e}")
                     logger.error(f"Imputation error: {e}", exc_info=True)
-        
+
         # Display imputed data if available
         if self.imputed_data is not None:
             if st.checkbox("Show imputed dataset"):
                 st.dataframe(self.imputed_data)
-    
+
     def _render_treatment_groups(self):
         """Render treatment group analysis."""
         st.header("Treatment Groups Analysis")
-        
+
         # Get treatment groups button
         if st.button("Get Treatment Groups"):
             with st.spinner("Analyzing treatment groups..."):
-                try:
-                    # Use imputed data if available, otherwise use original data
-                    if self.imputed_data is not None and st.checkbox("Use imputed data for treatment groups", value=True):
-                        # Need to set the data in the data_loader first
-                        original_data = self.data_loader.data
-                        self.data_loader.data = self.imputed_data
-                        self.treatment_groups = self.data_loader.get_treatment_groups()
-                        # Restore original data
-                        self.data_loader.data = original_data
-                    else:
-                        self.treatment_groups = self.data_loader.get_treatment_groups()
-                    
-                    st.success("Successfully analyzed treatment groups!")
-                except Exception as e:
-                    st.error(f"Error analyzing treatment groups: {e}")
-                    logger.error(f"Treatment group analysis error: {e}", exc_info=True)
-        
+                # try:
+                # Use imputed data if available, otherwise use original data
+                if self.imputed_data is not None and st.checkbox("Use imputed data for treatment groups", value=True):
+                    # Need to set the data in the data_loader first
+                    original_data = self.data_loader.data
+                    self.data_loader.data = self.imputed_data
+                    self.treatment_groups = self.data_loader.get_treatment_groups()
+                    # Restore original data
+                    self.data_loader.data = original_data
+                else:
+                    self.treatment_groups = self.data_loader.get_treatment_groups()
+
+                st.success("Successfully analyzed treatment groups!")
+                # except Exception as e:
+                #     st.error(f"Error analyzing treatment groups: {e}")
+                #     logger.error(f"Treatment group analysis error: {e}", exc_info=True)
+
         # Display treatment groups if available
+        st.write(self.treatment_groups)
         if self.treatment_groups is not None:
             st.subheader("Treatment Group Summary")
-            
+
             # Display group sizes
             group_sizes = {group: len(df) for group, df in self.treatment_groups.items()}
-            group_size_df = pd.DataFrame({
-                'Group': list(group_sizes.keys()),
-                'Size': list(group_sizes.values())
-            })
-            
+            group_size_df = pd.DataFrame({ 'Group': list(group_sizes.keys()), 'Size': list(group_sizes.values()) })
+
             col1, col2 = st.columns([2, 3])
-            
+
             with col1:
                 st.dataframe(group_size_df)
-            
+
             with col2:
                 fig, ax = plt.subplots(figsize=(8, 5))
                 sns.barplot(x='Group', y='Size', data=group_size_df, ax=ax)
@@ -366,41 +364,35 @@ class Dashboard:
                 ax.set_ylabel("Number of Participants")
                 plt.xticks(rotation=45)
                 st.pyplot(fig)
-            
+
             # Select a group to explore
-            selected_group = st.selectbox(
-                "Select a treatment group to explore",
-                options=list(self.treatment_groups.keys())
-            )
-            
+            selected_group = st.selectbox( "Select a treatment group to explore", options=list(self.treatment_groups.keys()) )
+
             if selected_group:
                 st.subheader(f"{selected_group} Group Data")
                 st.dataframe(self.treatment_groups[selected_group])
-                
+
                 # Analyze outcomes for the selected group
                 st.subheader(f"{selected_group} Outcome Analysis")
-                
+
                 # Find potential outcome variables (e.g., those with 'outcome', 'result', etc. in name)
                 outcome_keywords = ['outcome', 'result', 'score', 'pain', 'womac', 'function']
-                potential_outcomes = [col for col in self.treatment_groups[selected_group].columns 
+                potential_outcomes = [col for col in self.treatment_groups[selected_group].columns
                                     if any(keyword in col.lower() for keyword in outcome_keywords)]
-                
+
                 if potential_outcomes:
-                    selected_outcome = st.selectbox(
-                        "Select an outcome variable",
-                        options=potential_outcomes
-                    )
-                    
+                    selected_outcome = st.selectbox( "Select an outcome variable", options=potential_outcomes )
+
                     if selected_outcome and pd.api.types.is_numeric_dtype(self.treatment_groups[selected_group][selected_outcome]):
                         # Calculate statistics
                         outcome_stats = self.treatment_groups[selected_group][selected_outcome].describe()
-                        
+
                         col1, col2 = st.columns([1, 2])
-                        
+
                         with col1:
                             st.write("Outcome Statistics:")
                             st.write(outcome_stats)
-                        
+
                         with col2:
                             fig, ax = plt.subplots(figsize=(8, 5))
                             sns.histplot(self.treatment_groups[selected_group][selected_outcome].dropna(), kde=True, ax=ax)
@@ -410,57 +402,51 @@ class Dashboard:
                         st.info("Selected outcome is not numeric or contains no data.")
                 else:
                     st.info("No potential outcome variables identified.")
-                
+
                 # Compare with other groups
                 st.subheader("Compare Across Treatment Groups")
-                
+
                 # Find common numeric columns across all groups
                 common_numeric_cols = []
                 for col in self.treatment_groups[selected_group].columns:
-                    if all(col in group_df.columns and pd.api.types.is_numeric_dtype(group_df[col]) 
-                           for group_df in self.treatment_groups.values()):
+                    if all(col in group_df.columns and pd.api.types.is_numeric_dtype(group_df[col])
+                            for group_df in self.treatment_groups.values()):
                         common_numeric_cols.append(col)
-                
+
                 if common_numeric_cols:
-                    compare_var = st.selectbox(
-                        "Select variable to compare across groups",
-                        options=common_numeric_cols
-                    )
-                    
+                    compare_var = st.selectbox( "Select variable to compare across groups", options=common_numeric_cols )
+
                     if compare_var:
                         # Create comparison dataframe
                         comparison_data = []
                         for group_name, group_df in self.treatment_groups.items():
                             group_values = group_df[compare_var].dropna()
                             for value in group_values:
-                                comparison_data.append({
-                                    'Group': group_name,
-                                    'Value': value
-                                })
-                        
+                                comparison_data.append({ 'Group': group_name, 'Value': value })
+
                         comparison_df = pd.DataFrame(comparison_data)
-                        
+
                         fig, ax = plt.subplots(figsize=(10, 6))
                         sns.boxplot(x='Group', y='Value', data=comparison_df, ax=ax)
                         ax.set_title(f"{compare_var} Comparison Across Treatment Groups")
                         plt.xticks(rotation=45)
                         st.pyplot(fig)
-                        
+
                         # ANOVA or statistical test could be added here
                 else:
                     st.info("No common numeric variables found across all treatment groups.")
-    
+
     def _render_save_processed_data(self):
         """Render interface for saving processed data."""
         st.header("Save Processed Data")
-        
+
         # Select which dataset to save
         data_to_save = st.radio(
             "Select data to save:",
             options=["Original Data", "Imputed Data", "Treatment Group"],
             index=1 if self.imputed_data is not None else 0
         )
-        
+
         # Determine which data to use
         save_data = None
         if data_to_save == "Original Data":
@@ -481,20 +467,20 @@ class Dashboard:
             else:
                 st.warning("Treatment groups not available. Please analyze treatment groups first.")
                 return
-        
+
         # File name input
         filename = st.text_input(
             "Enter filename (CSV):",
             value=f"te_koa_{data_to_save.lower().replace(' ', '_')}.csv"
         )
-        
+
         # Additional options
         col1, col2 = st.columns(2)
         with col1:
             include_index = st.checkbox("Include index", value=False)
         with col2:
             include_header = st.checkbox("Include header", value=True)
-        
+
         # Save button
         if st.button("Save Data"):
             if save_data is not None:
@@ -502,7 +488,7 @@ class Dashboard:
                     # Ensure filename has .csv extension
                     if not filename.endswith('.csv'):
                         filename += '.csv'
-                    
+
                     # Save the data
                     self.data_loader.save_processed_data(
                         df=save_data,
@@ -510,9 +496,9 @@ class Dashboard:
                         index=include_index,
                         header=include_header
                     )
-                    
+
                     st.success(f"Successfully saved data to {filename}!")
-                    
+
                     # Provide download link
                     file_path = self.data_loader.data_dir / filename
                     if os.path.exists(file_path):
@@ -538,7 +524,7 @@ def main() -> None:
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
-        
+
         # Create and run dashboard
         dashboard = Dashboard()
         dashboard.render()
