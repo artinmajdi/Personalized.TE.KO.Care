@@ -30,9 +30,9 @@ class DataLoader:
         if data_dir is None:
             # Try to find a reasonable default path
             possible_paths = [
-                "/Users/artinmajdi/Documents/GitHubs/RAP/te_koa/dataset/te_koa_R01_only_RCT_data.xlsx",
-                "./dataset/TEKOAC sheet_R01_20250410_mostupdated_only RCT data.xlsx",
-                "./TEKOAC sheet_R01_20250410_mostupdated_only RCT data.xlsx"
+                "/Users/artinmajdi/Documents/GitHubs/RAP/te_koa_c__lee/dataset/te_koa_R01_only_RCT_data.xlsx",
+                "./dataset/te_koa_R01_only_RCT_data.xlsx",
+                "./te_koa_R01_only_RCT_data.xlsx"
             ]
 
             for path in possible_paths:
@@ -41,7 +41,7 @@ class DataLoader:
                     break
             else:
                 # If no path is found, use current directory
-                self.data_dir = Path.cwd() / "TEKOAC sheet_R01_20250410_mostupdated_only RCT data.xlsx"
+                self.data_dir = Path.cwd() / "te_koa_R01_only_RCT_data.xlsx"
         else:
             self.data_dir = Path(data_dir)
 
