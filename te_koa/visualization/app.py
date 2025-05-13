@@ -2249,7 +2249,7 @@ class Dashboard:
 							standardize=standardize
 						)
 
-# Store in session state
+						# Store in session state
 						if 'pipeline_results' not in st.session_state:
 							st.session_state.pipeline_results = {}
 

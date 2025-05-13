@@ -16,6 +16,8 @@ from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
 
+DATASET_NAME = "te_koa_R01_only_RCT_data.xlsx"
+
 
 class DataLoader:
     """An enhanced data loader for the Knee Osteoarthritis dataset."""
@@ -33,9 +35,9 @@ class DataLoader:
         if uploaded_file is None and data_dir is None:
             # Try to find a reasonable default path
             possible_paths = [
-                "/Users/artinmajdi/Documents/GitHubs/RAP/te_koa/dataset/te_koa_R01_only_RCT_data.xlsx",
-                "./dataset/te_koa_R01_only_RCT_data.xlsx",
-                "./te_koa_R01_only_RCT_data.xlsx"
+                f"/Users/artinmajdi/Documents/GitHubs/RAP/te_koa/dataset/{DATASET_NAME}",
+                f"./dataset/{DATASET_NAME}",
+                f"./{DATASET_NAME}",
             ]
 
             for path in possible_paths:
@@ -44,7 +46,7 @@ class DataLoader:
                     break
             else:
                 # If no path is found, use current directory
-                self.data_dir = Path.cwd() / "te_koa_R01_only_RCT_data.xlsx"
+                self.data_dir = Path.cwd() / DATASET_NAME
         else:
             self.data_dir = Path(data_dir) if data_dir else None
 
