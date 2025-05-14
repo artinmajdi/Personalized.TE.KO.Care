@@ -154,6 +154,32 @@ The TE-KOA dashboard provides an interactive interface for exploring and analyzi
 10. **Treatment Groups**: Analysis of treatment groups and their outcomes.
 11. **Pipeline & Export**: View applied processing steps and export the processed data.
 
+## TODO / Future Work
+
+Based on the project meeting on 4/30/2025, the following tasks are planned:
+
+- **Data Focus**: Ensure all analyses utilize the full dataset (n=208).
+- **Phenotype Derivation (Baseline Characteristics)**:
+  - Implement logic to derive patient phenotypes based on the 28 baseline characteristics highlighted by Chiyoung (dark blue in dataset/dictionary).
+  - These include:
+    - 13 sociodemographic, clinical, and baseline pain variables.
+    - 13 quantitative sensory testing (QST) measures.
+    - 2 psychological measures (CESD for depression, PCS for pain catastrophizing).
+  - For phenotyping, use WOMAC subscales (pain, physical function, stiffness) as baseline characteristics, not the WOMAC total score.
+- **Variable Grouping Strategies (for Phenotyping/Analysis)**:
+  - **Education**: Implement and evaluate grouping strategies for the education variable. Options include:
+    - `< high school` vs. `≥ high school`
+    - `< two-year college degree` vs. `≥ four-year college degree`
+    - The final grouping will be determined based on data proportions and statistical sense.
+  - **Marital Status**: Implement and evaluate grouping strategies for marital status. Options include:
+    - Grouping `1 = married` and `6 = living with partner` as `married/partnered`.
+    - Categorizing others as `unmarried/unpartnered`.
+    - The final grouping will be determined based on data proportions and statistical sense.
+- **Outcome Variable Refinement**:
+  - Confirm and implement the use of NRS (Numeric Rating Scale) and WOMAC (total score and subscales: pain, physical function, stiffness) as the primary outcomes.
+  - Note: Outcomes are measured at baseline, Day 5, Day 10, and monthly follow-ups (up to 3 months).
+- **Clinical Review Cycle**: Establish a process to notify Chiyoung upon completion of analysis updates for clinical validation of findings through the dashboard.
+
 ## Contributing
 
 Contributions to the TE-KOA project are welcome. Please feel free to submit a Pull Request.
