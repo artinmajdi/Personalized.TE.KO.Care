@@ -1809,7 +1809,7 @@ class DimensionalityPage:
                         )
 
                         st.markdown(f"**Optimal number of components:** {optimal_components} "
-                                   f"(explaining {variance_threshold*100:.0f}% of variance)")
+                                    f"(explaining {variance_threshold*100:.0f}% of variance)")
 
                         # Variance explained table
                         variance_df = data_manager.dimensionality_reducer.get_variance_explained(method='pca')
@@ -2813,9 +2813,9 @@ class TreatmentGroupsPage:
                              if var in compare_vars][:5]
                 )
 
-                # Select groups to compare
                 groups_to_compare = st.multiselect(
                     "Select groups to compare",
+                    key="groups_to_compare1",
                     options=list(treatment_groups.keys()),
                     default=[group for group in treatment_groups.keys()
                             if group not in ['Experimental']]  # Exclude 'Experimental' by default
@@ -2967,15 +2967,15 @@ class TreatmentGroupsPage:
                     "Select outcome variables to compare",
                     options=outcome_vars,
                     default=[var for var in ['WOMAC.Pain.Differ', 'WOMAC.Total.differ', 'NRS.Average.differ']
-                             if var in outcome_vars][:3]
+                            if var in outcome_vars][:3]
                 )
 
-                # Select groups to compare
                 groups_to_compare = st.multiselect(
-                    "Select groups to compare",
+                    "Select groups to compare ",
                     options=list(treatment_groups.keys()),
+                    key="groups_to_compare2",
                     default=[group for group in treatment_groups.keys()
-                            if group not in ['Experimental']]  # Exclude 'Experimental' by default
+                            if group not in ['Experimental']]
                 )
 
                 # Compare outcomes
@@ -3122,9 +3122,9 @@ class TreatmentGroupsPage:
                              if var in balance_vars][:5]
                 )
 
-                # Select groups to compare
                 groups_to_compare = st.multiselect(
                     "Select groups to compare",
+                    key="groups_to_compare3",
                     options=list(treatment_groups.keys()),
                     default=[group for group in treatment_groups.keys()
                             if group not in ['Experimental']]  # Exclude 'Experimental' by default

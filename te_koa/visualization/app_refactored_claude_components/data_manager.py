@@ -54,42 +54,67 @@ class DataManager:
         if 'current_page' not in st.session_state:
             st.session_state.current_page = 'Overview'
 
-    def load_data(self) -> bool:
+    def load_data(self, uploaded_file_obj: Optional[Any] = None) -> bool:
         """
-        Load the TE-KOA dataset.
+        Load the TE-KOA dataset from a provided uploaded file object.
+
+        Args:
+            uploaded_file_obj: The uploaded file object (e.g., from Streamlit's file_uploader).
+                               If None, loading will fail.
 
         Returns:
-            bool: True if data loaded successfully, False otherwise
+            bool: True if data loaded successfully, False otherwise.
         """
-        # Check if file is uploaded in session state
-        if 'uploaded_file' in st.session_state and st.session_state.uploaded_file is not None:
-            uploaded_file = st.session_state.uploaded_file
-            logger.info(f"Loading data from uploaded file: {uploaded_file.name}")
+        self.data_loader = None # Reset data_loader at the start of an attempt
 
-            # Create DataLoader with uploaded file
-            self.data_loader = DataLoader(uploaded_file=uploaded_file)
+        if uploaded_file_obj is not None:
+            file_name_for_log = getattr(uploaded_file_obj, 'name', 'uploaded_file') # Get name if available for logging
+            logger.info(f"DataManager attempting to load data from provided uploaded file: {file_name_for_log}")
+            # DataLoader is initialized with the uploaded file; data_dir will be None by default in DataLoader
+            # ensuring it doesn't look for default paths.
+            self.data_loader = DataLoader(uploaded_file=uploaded_file_obj)
+        else:
+            logger.warning("DataManager.load_data called without an 'uploaded_file_obj'. No data will be loaded.")
+            return False # Cannot proceed if no file object is given
 
         if self.data_loader is None:
+            # This case should ideally be caught by the 'else' above, but as a safeguard:
+            logger.error("DataManager could not initialize DataLoader, though an uploaded_file_obj was expected.")
             return False
 
-        # Load data using the data loader
-        self.data, self.dictionary = self.data_loader.load_data()
-        self.missing_data_report = self.data_loader.get_missing_data_report()
+        try:
+            # Load data using the initialized data loader
+            self.data, self.dictionary = self.data_loader.load_data()
+            self.missing_data_report = self.data_loader.get_missing_data_report()
 
-        # Initialize data components if data loaded successfully
-        if self.data is not None:
-            st.session_state.processed_data = self.data.copy()
-            st.session_state.data_loaded_time = pd.Timestamp.now()
+            # Initialize data components if data loaded successfully
+            if self.data is not None and self.dictionary is not None:
+                st.session_state.processed_data = self.data.copy()
+                st.session_state.data_loaded_time = pd.Timestamp.now()
+                log_file_name = getattr(uploaded_file_obj, 'name', 'the_uploaded_file')
+                logger.info(f"DataManager successfully loaded data: {len(self.data)} rows, {len(self.data.columns)} columns from {log_file_name}")
 
-            logger.info(f"Successfully loaded data: {len(self.data)} rows, {len(self.data.columns)} columns")
-
-            # Check for required treatment column
-            if 'tx.group' not in self.data.columns:
-                logger.warning("tx.group column not found in dataset")
-
-            return True
-
-        return False
+                # Check for required treatment column (optional, based on dataset specs)
+                if 'tx.group' not in self.data.columns:
+                    logger.warning("'tx.group' column not found in the loaded dataset.")
+                return True
+            else:
+                log_file_name_fail = getattr(uploaded_file_obj, 'name', 'the_uploaded_file')
+                logger.error(f"DataLoader failed to load data from {log_file_name_fail} (returned None for data/dictionary) within DataManager.")
+                # Ensure data attributes are reset if loading fails partway
+                self.data = None
+                self.dictionary = None
+                self.missing_data_report = None
+                return False
+        except Exception as e:
+            log_file_name_exc = getattr(uploaded_file_obj, 'name', 'the_uploaded_file')
+            logger.error(f"Exception occurred in DataManager.load_data while processing {log_file_name_exc}: {e}", exc_info=True)
+            # Reset state on critical failure
+            self.data = None
+            self.dictionary = None
+            self.missing_data_report = None
+            # self.data_loader might be kept for debugging or reset: self.data_loader = None
+            return False
 
     def get_data(self) -> pd.DataFrame:
         """Get the current processed data."""

@@ -72,7 +72,7 @@ class Dashboard:
                 with st.spinner(f"Loading dataset from {uploaded_file_in_session.name}..."):
                     # Explicitly pass the uploaded file to DataManager's load_data method.
                     # This ensures DataManager uses this specific file.
-                    if not self.data_manager.load_data():
+                    if not self.data_manager.load_data(uploaded_file_obj=uploaded_file_in_session):
                         st.error(
                             f"Failed to load the uploaded dataset: {uploaded_file_in_session.name}. "
                             "Please ensure it's a valid Excel file with 'Sheet1' for data and 'dictionary' for the data dictionary."
