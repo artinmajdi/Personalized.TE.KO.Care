@@ -16,28 +16,28 @@ from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
 
-DATASET_NAME = "te_koa_R01_only_RCT_data.xlsx"
 
-
+DATASET_NAME = 'te_koa_R01_only_RCT_data.xlsx'
 class DataLoader:
     """An enhanced data loader for the Knee Osteoarthritis dataset."""
 
-    def __init__(self, data_dir: Optional[str] = None, uploaded_file: Optional[object] = None):
+    def __init__(self, data_dir: Optional[str] = None, uploaded_file: Optional[str] = None):
         """
-        Initialize the DataLoader with a data directory or uploaded file.
+        Initialize the DataLoader.
 
         Args:
-            data_dir: Path to the data directory or Excel file. If None, uses a default path.
-            uploaded_file: Streamlit uploaded file object. If provided, this takes precedence over data_dir.
+            data_dir: Path to the data directory or default Excel file.
+            uploaded_file: An uploaded file object (e.g., from Streamlit), path to an Excel file,
+                           or any object pandas.read_excel can handle. If provided, this will be used
+                           for loading data, taking precedence over data_dir.
         """
-        self.uploaded_file = uploaded_file
-
-        if uploaded_file is None and data_dir is None:
+        self.uploaded_file = uploaded_file  # Store the uploaded_file instance variable
+        if data_dir is None:
             # Try to find a reasonable default path
             possible_paths = [
-                f"/Users/artinmajdi/Documents/GitHubs/RAP/te_koa/dataset/{DATASET_NAME}",
+                f"/Users/artinmajdi/Documents/GitHubs/RAP/te_koa_c__lee/dataset/{DATASET_NAME}",
                 f"./dataset/{DATASET_NAME}",
-                f"./{DATASET_NAME}",
+                f"./{DATASET_NAME}"
             ]
 
             for path in possible_paths:
@@ -48,7 +48,7 @@ class DataLoader:
                 # If no path is found, use current directory
                 self.data_dir = Path.cwd() / DATASET_NAME
         else:
-            self.data_dir = Path(data_dir) if data_dir else None
+            self.data_dir = Path(data_dir)
 
         # Keep track of loaded data
         self.data = None
@@ -59,6 +59,7 @@ class DataLoader:
     def load_data(self, sheet_name: str = "Sheet1", dictionary_sheet: str = "dictionary", **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Load the Knee Osteoarthritis dataset and data dictionary.
+        Prioritizes `uploaded_file` if available, otherwise uses `data_dir`.
 
         Args:
             sheet_name: Name of the sheet containing the actual data
@@ -69,39 +70,42 @@ class DataLoader:
             Tuple containing (data DataFrame, data dictionary DataFrame)
 
         Raises:
-            FileNotFoundError: If the file doesn't exist
-            ValueError: If required sheets are missing
+            FileNotFoundError: If the specified file path (from data_dir or uploaded_file if it's a path) doesn't exist.
+            ValueError: If no data source (neither uploaded_file nor data_dir) is configured.
+            Exception: For other pandas or I/O related loading errors.
         """
+        source_to_load = None
+        source_name_for_log = "unknown source" # Default for logging
+
+        if self.uploaded_file:
+            source_to_load = self.uploaded_file
+            # Try to get a descriptive name for logging
+            if hasattr(self.uploaded_file, 'name') and getattr(self.uploaded_file, 'name'): # Check if name exists and is not empty
+                source_name_for_log = getattr(self.uploaded_file, 'name')
+            elif isinstance(self.uploaded_file, str):
+                source_name_for_log = Path(self.uploaded_file).name
+            else: # It's some other object, or name attribute is empty/None
+                source_name_for_log = "uploaded data"
+            logger.info(f"Attempting to load data from uploaded source: '{source_name_for_log}'")
+        elif self.data_dir:
+            source_to_load = self.data_dir
+            source_name_for_log = str(self.data_dir)
+            logger.info(f"Attempting to load data from configured path: {source_name_for_log}")
+        else:
+            logger.error("DataLoader is not configured with a data source (uploaded_file or data_dir).")
+            raise ValueError("No data source configured for DataLoader.")
+
+        if source_to_load is None: # Safeguard, should be caught by the logic above
+             logger.critical("Internal error: source_to_load is None before pd.read_excel. This should not happen.")
+             raise ValueError("Internal configuration error: data source became None unexpectedly.")
+
         try:
-            # Determine the data source
-            if self.uploaded_file is not None:
-                logger.info("Loading data from uploaded file")
-                excel_file = pd.ExcelFile(self.uploaded_file)
-                source = self.uploaded_file
-            else:
-                logger.info(f"Loading data from file path: {self.data_dir}")
-                if not self.data_dir.exists():
-                    raise FileNotFoundError(f"File not found: {self.data_dir}")
-                excel_file = pd.ExcelFile(self.data_dir)
-                source = self.data_dir
-
-            # Verify required sheets exist
-            sheets = excel_file.sheet_names
-            missing_sheets = []
-            if sheet_name not in sheets:
-                missing_sheets.append(sheet_name)
-            if dictionary_sheet not in sheets:
-                missing_sheets.append(dictionary_sheet)
-
-            if missing_sheets:
-                raise ValueError(f"Missing required sheets: {', '.join(missing_sheets)}")
-
             # Load both data and dictionary sheets
-            data = pd.read_excel(source, sheet_name=sheet_name, **kwargs)
-            data_dict = pd.read_excel(source, sheet_name=dictionary_sheet, **kwargs)
+            data = pd.read_excel(source_to_load, sheet_name=sheet_name, **kwargs)
+            data_dict = pd.read_excel(source_to_load, sheet_name=dictionary_sheet, **kwargs)
 
-            logger.info(f"Successfully loaded {len(data)} rows from {sheet_name} sheet")
-            logger.info(f"Successfully loaded {len(data_dict)} rows from {dictionary_sheet} sheet")
+            logger.info(f"Successfully loaded {len(data)} rows from '{sheet_name}' sheet of '{source_name_for_log}'")
+            logger.info(f"Successfully loaded {len(data_dict)} rows from '{dictionary_sheet}' sheet of '{source_name_for_log}'")
 
             # Store the loaded data
             self.data = data
@@ -118,8 +122,11 @@ class DataLoader:
 
             return data, data_dict
 
+        except FileNotFoundError:
+            logger.error(f"File not found at path: {str(source_to_load)}")
+            raise
         except Exception as e:
-            logger.error(f"Error loading Excel file: {str(e)}")
+            logger.error(f"Error loading Excel data from '{source_name_for_log}': {e}")
             raise
 
     def _normalize_data_dictionary(self):
