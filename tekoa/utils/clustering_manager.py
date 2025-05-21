@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 import logging
+from typing import Any
 
-from te_koa.utils.clustering_algorithms import perform_kmeans, perform_pam, perform_gmm
-from te_koa.utils.clustering_validation import (
+from tekoa.utils.clustering_algorithms import perform_kmeans, perform_pam, perform_gmm
+from tekoa.utils.clustering_validation import (
     calculate_silhouette_score,
     calculate_davies_bouldin_score,
     calculate_model_native_score
@@ -66,7 +67,7 @@ class ClusteringManager:
                     continue
             elif algorithm_type == 'gmm':
                 model, labels = perform_gmm(self.data, n_components=k, random_state=random_state)
-            
+
             if model is not None and labels is not None and len(labels) > 0:
                 # Ensure labels are not all the same for silhouette and davies-bouldin
                 if len(np.unique(labels)) < 2:
@@ -78,7 +79,7 @@ class ClusteringManager:
                     db_score = calculate_davies_bouldin_score(self.data, labels)
 
                 n_score = calculate_model_native_score(model, self.data, model_type=algorithm_type)
-                
+
                 self.results[algorithm_type][k] = {
                     'model': model,
                     'labels': labels,
@@ -124,7 +125,7 @@ class ClusteringManager:
         logger.warning(f"Labels not found for algorithm '{algorithm_type}' and n_clusters={n_clusters}.")
         return None
 
-    def get_model(self, algorithm_type: str, n_clusters: int) -> any | None:
+    def get_model(self, algorithm_type: str, n_clusters: int) -> Any | None:
         """
         Retrieves the fitted model object for a specific algorithm and number of clusters.
 

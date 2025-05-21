@@ -11,7 +11,7 @@ This document provides an overview of the TE-KOA system architecture, explaining
 The TE-KOA project is structured as a Python package with several modules that handle different aspects of the application:
 
 ```
-te_koa/
+tekoa/
 ├── io/                   # Input/output operations
 ├── configurations/       # Configuration settings
 ├── utils/                # Utility functions
@@ -23,50 +23,58 @@ te_koa/
 ### Data Loading and Processing
 
 The data loading and processing components are responsible for:
+
 - Loading data from Excel files (either uploaded through the UI or from a directory)
 - Preprocessing the data
 - Handling missing values
 - Analyzing data quality
 
 Key classes and modules:
-- `DataLoader` in `te_koa/io/data_loader.py`: Handles loading and preprocessing data
-- `analyze_dictionary.py` in `te_koa/io/`: Analyzes the data dictionary
-- `analyze_excel_file.py` in `te_koa/io/`: Analyzes Excel file structure
+
+- `DataLoader` in `tekoa/io/data_loader.py`: Handles loading and preprocessing data
+- `analyze_dictionary.py` in `tekoa/io/`: Analyzes the data dictionary
+- `analyze_excel_file.py` in `tekoa/io/`: Analyzes Excel file structure
 
 As noted in the project memory, the `DataLoader` class has been modified to prioritize loading data from an `uploaded_file` object if provided during initialization.
 
 ### Configuration Management
 
 The configuration management components handle:
+
 - Application settings
 - Parameter definitions
 - Environment variables
 
 Key modules:
-- `settings.py` in `te_koa/configurations/`: Defines application settings
-- `params.py` in `te_koa/configurations/`: Defines parameter values
+
+- `settings.py` in `tekoa/configurations/`: Defines application settings
+- `params.py` in `tekoa/configurations/`: Defines parameter values
 
 ### Visualization
 
 The visualization components provide:
+
 - Interactive dashboard using Streamlit
 - Data exploration tools
 - Statistical visualizations
 - Analysis results presentation
 
 Key modules:
-- `app.py` in `te_koa/visualization/`: Main Streamlit application
-- `app_refactored_claude_components/` in `te_koa/visualization/`: UI and logic components for the dashboard
+
+- `app.py` in `tekoa/visualization/`: Main Streamlit application
+- `app_refactored_claude_components/` in `tekoa/visualization/`: UI and logic components for the dashboard
 
 ### Utilities
 
 The utilities components provide:
+
 - Helper functions
 - File monitoring
 - Logging
 
 Key modules:
-- `watchdog.py` in `te_koa/utils/`: File monitoring utilities
+
+- `watchdog.py` in `tekoa/utils/`: File monitoring utilities
 
 ## Data Flow
 
@@ -95,6 +103,7 @@ Key modules:
 ### External Libraries
 
 The TE-KOA project integrates with several external libraries:
+
 - **Pandas**: For data manipulation and analysis
 - **NumPy**: For numerical operations
 - **Streamlit**: For the interactive dashboard
@@ -104,6 +113,7 @@ The TE-KOA project integrates with several external libraries:
 ### File System
 
 The application interacts with the file system for:
+
 - Loading data from Excel files
 - Saving processed data
 - Reading and writing configuration files
@@ -115,6 +125,7 @@ The TE-KOA application can be deployed in several ways:
 ### Local Deployment
 
 For local development and testing:
+
 - Python virtual environment
 - Local file system for data storage
 - Streamlit server running locally
@@ -122,6 +133,7 @@ For local development and testing:
 ### Docker Deployment
 
 For containerized deployment:
+
 - Docker container with all dependencies
 - Volume mounts for data persistence
 - Exposed port for accessing the Streamlit interface
@@ -129,6 +141,7 @@ For containerized deployment:
 ### Cloud Deployment
 
 For production deployment:
+
 - Streamlit Cloud for hosting the dashboard
 - Cloud storage for data (if needed)
 - Environment variables for configuration
@@ -142,6 +155,7 @@ For production deployment:
 ## Future Architecture Extensions
 
 Potential future extensions to the architecture include:
+
 - Database integration for persistent storage
 - Authentication and authorization for multi-user access
 - API endpoints for programmatic access

@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from unittest.mock import patch, MagicMock, call # Added call for checking call arguments
 
-from te_koa.utils.clustering_manager import ClusteringManager
+from tekoa.utils.clustering_manager import ClusteringManager
 import logging
 
 # Suppress logging output during tests for cleaner test results
@@ -36,12 +36,12 @@ class TestClusteringManager(unittest.TestCase):
         mock_labels = np.random.randint(0, k_for_labels, size=len(self.test_famd_components))
         return mock_model, mock_labels
 
-    @patch('te_koa.utils.clustering_manager.calculate_model_native_score')
-    @patch('te_koa.utils.clustering_manager.calculate_davies_bouldin_score')
-    @patch('te_koa.utils.clustering_manager.calculate_silhouette_score')
-    @patch('te_koa.utils.clustering_manager.perform_gmm')
-    @patch('te_koa.utils.clustering_manager.perform_pam')
-    @patch('te_koa.utils.clustering_manager.perform_kmeans')
+    @patch('tekoa.utils.clustering_manager.calculate_model_native_score')
+    @patch('tekoa.utils.clustering_manager.calculate_davies_bouldin_score')
+    @patch('tekoa.utils.clustering_manager.calculate_silhouette_score')
+    @patch('tekoa.utils.clustering_manager.perform_gmm')
+    @patch('tekoa.utils.clustering_manager.perform_pam')
+    @patch('tekoa.utils.clustering_manager.perform_kmeans')
     def test_run_clustering_pipeline_kmeans_success(self, mock_perform_kmeans, mock_perform_pam, mock_perform_gmm,
                                                  mock_calc_silhouette, mock_calc_davies_bouldin, mock_calc_native_score):
         # Configure mocks
@@ -81,12 +81,12 @@ class TestClusteringManager(unittest.TestCase):
         mock_perform_pam.assert_not_called()
         mock_perform_gmm.assert_not_called()
 
-    @patch('te_koa.utils.clustering_manager.calculate_model_native_score')
-    @patch('te_koa.utils.clustering_manager.calculate_davies_bouldin_score')
-    @patch('te_koa.utils.clustering_manager.calculate_silhouette_score')
-    @patch('te_koa.utils.clustering_manager.perform_gmm')
-    @patch('te_koa.utils.clustering_manager.perform_pam')
-    @patch('te_koa.utils.clustering_manager.perform_kmeans')
+    @patch('tekoa.utils.clustering_manager.calculate_model_native_score')
+    @patch('tekoa.utils.clustering_manager.calculate_davies_bouldin_score')
+    @patch('tekoa.utils.clustering_manager.calculate_silhouette_score')
+    @patch('tekoa.utils.clustering_manager.perform_gmm')
+    @patch('tekoa.utils.clustering_manager.perform_pam')
+    @patch('tekoa.utils.clustering_manager.perform_kmeans')
     def test_run_clustering_pipeline_pam_success(self, mock_perform_kmeans, mock_perform_pam, mock_perform_gmm,
                                               mock_calc_silhouette, mock_calc_davies_bouldin, mock_calc_native_score):
         mock_perform_pam.side_effect = self._mock_clustering_outputs
@@ -119,12 +119,12 @@ class TestClusteringManager(unittest.TestCase):
         mock_perform_kmeans.assert_not_called()
         mock_perform_gmm.assert_not_called()
 
-    @patch('te_koa.utils.clustering_manager.calculate_model_native_score')
-    @patch('te_koa.utils.clustering_manager.calculate_davies_bouldin_score')
-    @patch('te_koa.utils.clustering_manager.calculate_silhouette_score')
-    @patch('te_koa.utils.clustering_manager.perform_gmm')
-    @patch('te_koa.utils.clustering_manager.perform_pam')
-    @patch('te_koa.utils.clustering_manager.perform_kmeans')
+    @patch('tekoa.utils.clustering_manager.calculate_model_native_score')
+    @patch('tekoa.utils.clustering_manager.calculate_davies_bouldin_score')
+    @patch('tekoa.utils.clustering_manager.calculate_silhouette_score')
+    @patch('tekoa.utils.clustering_manager.perform_gmm')
+    @patch('tekoa.utils.clustering_manager.perform_pam')
+    @patch('tekoa.utils.clustering_manager.perform_kmeans')
     def test_run_clustering_pipeline_gmm_success(self, mock_perform_kmeans, mock_perform_pam, mock_perform_gmm,
                                                mock_calc_silhouette, mock_calc_davies_bouldin, mock_calc_native_score):
         mock_perform_gmm.side_effect = self._mock_clustering_outputs
@@ -157,11 +157,11 @@ class TestClusteringManager(unittest.TestCase):
         mock_perform_kmeans.assert_not_called()
         mock_perform_pam.assert_not_called()
 
-    @patch('te_koa.utils.clustering_manager.calculate_model_native_score')
-    @patch('te_koa.utils.clustering_manager.calculate_davies_bouldin_score')
-    @patch('te_koa.utils.clustering_manager.calculate_silhouette_score')
-    @patch('te_koa.utils.clustering_manager.perform_pam')
-    def test_run_clustering_pipeline_pam_failure(self, mock_perform_pam, mock_calc_silhouette, 
+    @patch('tekoa.utils.clustering_manager.calculate_model_native_score')
+    @patch('tekoa.utils.clustering_manager.calculate_davies_bouldin_score')
+    @patch('tekoa.utils.clustering_manager.calculate_silhouette_score')
+    @patch('tekoa.utils.clustering_manager.perform_pam')
+    def test_run_clustering_pipeline_pam_failure(self, mock_perform_pam, mock_calc_silhouette,
                                              mock_calc_davies_bouldin, mock_calc_native_score):
         # Configure mock_perform_pam to simulate failure
         mock_perform_pam.return_value = (None, np.array([]))
@@ -170,7 +170,7 @@ class TestClusteringManager(unittest.TestCase):
         self.manager.run_clustering_pipeline('pam', [test_k_val], random_state=self.random_state)
 
         mock_perform_pam.assert_called_once_with(self.test_famd_components, n_clusters=test_k_val, random_state=self.random_state)
-        
+
         # Metrics functions should not be called if model is None
         mock_calc_silhouette.assert_not_called()
         mock_calc_davies_bouldin.assert_not_called()
@@ -179,7 +179,7 @@ class TestClusteringManager(unittest.TestCase):
         self.assertIn('pam', self.manager.results)
         self.assertIn(test_k_val, self.manager.results['pam'])
         result_k = self.manager.results['pam'][test_k_val]
-        
+
         self.assertIsNone(result_k['model'])
         self.assertEqual(len(result_k['labels']), 0)
         self.assertTrue(np.isnan(result_k['silhouette']))
@@ -205,7 +205,7 @@ class TestClusteringManager(unittest.TestCase):
 
         none_labels = self.manager.get_labels('kmeans', 99) # Non-existent k
         self.assertIsNone(none_labels)
-        
+
         none_labels_algo = self.manager.get_labels('non_existent', 2) # Non-existent algo
         self.assertIsNone(none_labels_algo)
 

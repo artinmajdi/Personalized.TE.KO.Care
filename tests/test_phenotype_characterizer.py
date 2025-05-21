@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from unittest.mock import patch, MagicMock
 
-from te_koa.utils.phenotype_characterizer import (
+from tekoa.utils.phenotype_characterizer import (
     _calculate_eta_squared,
     _calculate_cramers_v,
     compare_variable_across_clusters,
@@ -12,14 +12,14 @@ from te_koa.utils.phenotype_characterizer import (
 import logging
 
 # Get the logger for the module to be tested to check log messages
-phenotype_logger = logging.getLogger('te_koa.utils.phenotype_characterizer')
+phenotype_logger = logging.getLogger('tekoa.utils.phenotype_characterizer')
 
 class TestPhenotypeCharacterizer(unittest.TestCase):
 
     def setUp(self):
         self.numeric_var_data = pd.DataFrame({
             'NumericVar': [10, 12, 11, 20, 22, 21, 30, 32, 31, 15, 25, 35],
-            'Cluster':    [0,  0,  0,  1,  1,  1,  2,  2,  2,  0,  1,  2 ] 
+            'Cluster':    [0,  0,  0,  1,  1,  1,  2,  2,  2,  0,  1,  2 ]
         })
         self.categorical_var_data = pd.DataFrame({
             'CategoricalVar': ['A', 'B', 'A', 'B', 'A', 'B', 'C', 'A', 'C', 'B', 'C', 'A'],
@@ -64,7 +64,7 @@ class TestPhenotypeCharacterizer(unittest.TestCase):
         self.assertGreaterEqual(result['Statistic'], 0)
         self.assertIsInstance(result['EffectSize'], float)
         self.assertTrue(0 <= result['EffectSize'] <= 1)
-        
+
     def test_compare_variable_insufficient_clusters(self):
         data = pd.DataFrame({'Var': [1,2,3], 'Cluster': [0,0,0]})
         result = compare_variable_across_clusters(data, 'Var')
@@ -73,13 +73,13 @@ class TestPhenotypeCharacterizer(unittest.TestCase):
 
     def test_compare_variable_anova_not_enough_groups(self):
         # Test case: one group has only one sample after dropna
-        data_test = pd.DataFrame({'NumericVar': [10, np.nan, 20, 21], 'Cluster': [0,0,1,1]}) 
+        data_test = pd.DataFrame({'NumericVar': [10, np.nan, 20, 21], 'Cluster': [0,0,1,1]})
         result = compare_variable_across_clusters(data_test, 'NumericVar')
         self.assertEqual(result['TestType'], 'ANOVA_NotEnoughGroups')
         self.assertTrue(np.isnan(result['PValue']))
 
         # Test case: only one distinct group remains after dropna
-        data_test_one_group_left = pd.DataFrame({'NumericVar': [10, 11, np.nan, np.nan], 'Cluster': [0,0,1,1]}) 
+        data_test_one_group_left = pd.DataFrame({'NumericVar': [10, 11, np.nan, np.nan], 'Cluster': [0,0,1,1]})
         result_one_group = compare_variable_across_clusters(data_test_one_group_left, 'NumericVar')
         self.assertEqual(result_one_group['TestType'], 'ANOVA_NotEnoughGroups') # or InsufficientClusters if it drops to 1 group
         self.assertTrue(np.isnan(result_one_group['PValue']))
@@ -91,7 +91,7 @@ class TestPhenotypeCharacterizer(unittest.TestCase):
         result = compare_variable_across_clusters(data_test, 'CatVar')
         self.assertEqual(result['TestType'], 'ChiSquare_SmallTable')
         self.assertTrue(np.isnan(result['PValue']))
-        
+
         # This data will result in a 2x1 table for cluster 1 (only 'B') if we filter that way, but crosstab does not.
         # The actual crosstab will be CatVar (rows) x Cluster (cols).
         # CatVar A: C0=2, C1=0
@@ -125,7 +125,7 @@ class TestPhenotypeCharacterizer(unittest.TestCase):
         self.assertIsInstance(results_df, pd.DataFrame)
         self.assertEqual(len(results_df), len(variables_to_compare))
         self.assertListEqual(list(results_df.columns), ['Variable', 'TestType', 'Statistic', 'PValue', 'CorrectedPValue', 'RejectNullFDR', 'EffectSize'])
-        
+
         self.assertEqual(results_df[results_df['Variable'] == 'Age']['TestType'].iloc[0], 'ANOVA')
         self.assertEqual(results_df[results_df['Variable'] == 'Severity']['TestType'].iloc[0], 'Chi-Square')
         self.assertEqual(results_df[results_df['Variable'] == 'Outcome']['TestType'].iloc[0], 'ANOVA')
@@ -136,20 +136,20 @@ class TestPhenotypeCharacterizer(unittest.TestCase):
             self.assertFalse(results_df['RejectNullFDR'].isna().all())
 
 
-    @patch('te_koa.utils.phenotype_characterizer.multipletests', None) # Simulate import error by making it None
+    @patch('tekoa.utils.phenotype_characterizer.multipletests', None) # Simulate import error by making it None
     def test_characterize_phenotypes_no_statsmodels_via_none(self, mock_multipletests_is_none):
         # This test uses the fact that characterize_phenotypes has a try-except around the import.
         # Setting multipletests to None in the module's scope for this test will trigger the except.
         with self.assertLogs(logger=phenotype_logger, level='WARNING') as cm:
             results_df = characterize_phenotypes(self.mixed_data_for_characterization, self.labels, ['Age', 'Outcome'])
-        
+
         self.assertTrue(any("statsmodels.stats.multitest not found" in message for message in cm.output))
         self.assertTrue(results_df['CorrectedPValue'].isna().all())
         self.assertTrue(results_df['RejectNullFDR'].isna().all()) # pd.NA makes this true
 
     def test_characterize_phenotypes_empty_inputs(self):
         expected_cols = ['Variable', 'TestType', 'Statistic', 'PValue', 'CorrectedPValue', 'RejectNullFDR', 'EffectSize']
-        
+
         # Empty original_data
         df_empty = characterize_phenotypes(pd.DataFrame(), self.labels, ['Age'])
         self.assertTrue(df_empty.empty)

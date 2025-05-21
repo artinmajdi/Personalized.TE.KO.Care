@@ -12,15 +12,17 @@ import streamlit as st
 import time
 import json
 from typing import Dict, List, Optional, Tuple, Any, Union
-from pathlib import Path
 
-from te_koa.io.data_loader import DataLoader
-from te_koa.utils.variable_screener import VariableScreener
-from te_koa.utils.dimensionality_reducer import DimensionalityReducer
-from te_koa.utils.data_quality_enhancer import DataQualityEnhancer
-from te_koa.utils.clustering_manager import ClusteringManager 
-from te_koa.utils.phenotype_characterizer import characterize_phenotypes # Added
-from te_koa.configurations.params import DatasetNames
+from tekoa.io import DataLoader
+
+from tekoa.utils import (
+    VariableScreener,
+    DimensionalityReducer,
+    DataQualityEnhancer,
+    ClusteringManager,
+    characterize_phenotypes
+)
+from tekoa.configurations.params import DatasetNames
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ class DataManager:
     def __init__(self):
         """Initialize the data manager."""
         self.data_loader: Optional[DataLoader] = None
-        self.dataset_name = DatasetNames.TE_KOA.value
+        self.dataset_name = DatasetNames.TEKOA.value
         self.data = None
         self.dictionary = None
         self.imputed_data = None
@@ -271,14 +273,13 @@ class DataManager:
         # Perform the reduction
         if method == 'pca':
             results = self.dimensionality_reducer.perform_pca(
-                variables=variables,
-                n_components=n_components,
-                standardize=standardize
+                variables    = variables,
+                n_components = n_components,
+                standardize  = standardize
             )
         elif method == 'famd':
-            results = self.dimensionality_reducer.perform_famd(
-                n_components=n_components
-            )
+            results = self.dimensionality_reducer.perform_famd( n_components=n_components )
+
         else:
             raise ValueError(f"Unknown dimensionality reduction method: {method}")
 
@@ -292,6 +293,7 @@ class DataManager:
             explained_variance = explained_variance.tolist()
 
         cumulative_explained_variance = results.get('cumulative_explained_variance', [])
+
         if isinstance(cumulative_explained_variance, np.ndarray):
             cumulative_explained_variance = cumulative_explained_variance.tolist()
 
@@ -696,7 +698,7 @@ class DataManager:
 
         Args:
             data_for_clustering: DataFrame to be used for clustering (e.g., FAMD components).
-        
+
         Returns:
             bool: True if initialized successfully, False otherwise.
         """
@@ -715,11 +717,11 @@ class DataManager:
 
         Args:
             k_list: List of k values (number of clusters/components) to try for each algorithm.
-            optimal_famd_components_count: The number of FAMD components to use. 
+            optimal_famd_components_count: The number of FAMD components to use.
                                            If None, it attempts to retrieve from dimensionality_reduction results.
             data_source: Source of data for clustering. Currently supports 'famd'.
             random_state: Random state for reproducibility.
-        
+
         Returns:
             bool: True if all analyses were run successfully, False otherwise.
         """
@@ -728,7 +730,7 @@ class DataManager:
             st.error(f"Unsupported data_source for clustering: {data_source}.")
             return False
 
-        self.initialize_dimensionality_reducer() 
+        self.initialize_dimensionality_reducer()
         if self.dimensionality_reducer is None:
             logger.error("DimensionalityReducer not initialized in DataManager. Cannot obtain FAMD components.")
             st.error("DimensionalityReducer not available. Cannot get FAMD components.")
@@ -754,13 +756,13 @@ class DataManager:
                 logger.error("Optimal FAMD components count not specified and could not be determined.")
                 st.error("FAMD optimal components not determined. Please run FAMD (and determine optimal components) on the Dimensionality Reduction page first.")
                 return False
-        
+
         if not isinstance(actual_optimal_famd_components_count, int) or actual_optimal_famd_components_count <= 0:
             logger.error(f"Invalid number of FAMD components determined: {actual_optimal_famd_components_count}")
             st.error(f"Invalid number of FAMD components: {actual_optimal_famd_components_count}. Ensure FAMD is run correctly.")
             return False
 
-        current_data_for_famd = self.get_data() 
+        current_data_for_famd = self.get_data()
         needs_famd_rerun = True
         if self.dimensionality_reducer and self.dimensionality_reducer.famd_results and \
            self.dimensionality_reducer.famd_results.get('transformed_data') is not None and \
@@ -776,17 +778,17 @@ class DataManager:
                 logger.error("Data for FAMD is not available (current processed data is None or empty).")
                 st.error("Cannot run FAMD as current dataset is unavailable.")
                 return False
-            
+
             famd_execution_results = self.perform_dimensionality_reduction(
                 method='famd',
-                variables=None, 
+                variables=None,
                 n_components=actual_optimal_famd_components_count
             )
-            if not famd_execution_results: 
+            if not famd_execution_results:
                 logger.error("Failed to execute perform_dimensionality_reduction for FAMD.")
                 st.error("Failed to prepare FAMD components for clustering via perform_dimensionality_reduction.")
                 return False
-        
+
         famd_components_df = self.transform_data(method='famd', n_components=actual_optimal_famd_components_count)
 
         if famd_components_df is None or famd_components_df.empty:
@@ -797,10 +799,10 @@ class DataManager:
         if not self.initialize_clustering_manager(famd_components_df):
             st.error("Failed to initialize Clustering Manager with FAMD components.")
             return False
-        
+
         algorithms_to_run = ['kmeans', 'pam', 'gmm']
         all_successful = True
-        
+
         st.session_state.pipeline_results.setdefault('clustering', {})
 
         for algo in algorithms_to_run:
@@ -809,16 +811,16 @@ class DataManager:
                 self.clustering_manager.run_clustering_pipeline(
                     algorithm_type=algo,
                     k_list=k_list,
-                    random_state=random_state 
+                    random_state=random_state
                 )
                 st.session_state.pipeline_results['clustering'][algo] = self.clustering_manager.get_clustering_results(algo)
                 logger.info(f"Completed {algo} clustering. Results stored for {len(st.session_state.pipeline_results['clustering'][algo])} k values.")
             except Exception as e:
                 logger.error(f"Error running {algo} clustering: {e}", exc_info=True)
                 st.error(f"An error occurred during {algo} clustering: {e}")
-                st.session_state.pipeline_results['clustering'][algo] = {} 
+                st.session_state.pipeline_results['clustering'][algo] = {}
                 all_successful = False
-        
+
         if all_successful:
             logger.info("All clustering analyses completed and results stored in session state.")
         else:
@@ -830,7 +832,7 @@ class DataManager:
         Retrieves all clustering results stored in the session state.
 
         Returns:
-            dict: A dictionary containing all clustering results, 
+            dict: A dictionary containing all clustering results,
                   structured by algorithm type. Returns empty dict if no results.
         """
         return st.session_state.pipeline_results.get('clustering', {})
@@ -865,13 +867,13 @@ class DataManager:
             variables_to_compare: A list of original variable names to compare across clusters.
 
         Returns:
-            Optional[pd.DataFrame]: A DataFrame with characterization results 
+            Optional[pd.DataFrame]: A DataFrame with characterization results
                                     (Variable, TestType, Statistic, PValue, CorrectedPValue, RejectNullFDR, EffectSize),
                                     or None if inputs are invalid or characterization fails.
         """
         logger.info(f"Starting phenotype characterization for {algorithm_type}, k={n_clusters} using {len(variables_to_compare)} variables.")
 
-        original_data = self.get_original_data() 
+        original_data = self.get_original_data()
         if original_data is None or original_data.empty:
             logger.error("Original data is not available in DataManager. Cannot characterize phenotypes.")
             st.error("Original dataset not found. Please ensure data is loaded.")
@@ -882,7 +884,7 @@ class DataManager:
             logger.error(f"No labels found for {algorithm_type} with {n_clusters} clusters. Cannot characterize.")
             st.error(f"Cluster labels for {algorithm_type} (k={n_clusters}) not found. Please ensure clustering was run successfully.")
             return None
-        
+
         if len(labels) == 0: # Handles case where PAM failed and returned empty array
             logger.error(f"Labels array is empty for {algorithm_type} with {n_clusters} clusters. Cannot characterize.")
             st.error(f"Cluster labels for {algorithm_type} (k={n_clusters}) are empty. Clustering might have failed.")
@@ -909,9 +911,9 @@ class DataManager:
             st.session_state.pipeline_results.setdefault('clustering', {})
             st.session_state.pipeline_results['clustering'].setdefault(algorithm_type, {})
             st.session_state.pipeline_results['clustering'][algorithm_type].setdefault(n_clusters, {})
-            
+
             st.session_state.pipeline_results['clustering'][algorithm_type][n_clusters]['characterization_results'] = characterization_df
-            
+
             logger.info(f"Phenotype characterization completed. Results stored for {algorithm_type}, k={n_clusters}.")
             return characterization_df
 

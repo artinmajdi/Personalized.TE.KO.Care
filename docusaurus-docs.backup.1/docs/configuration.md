@@ -18,11 +18,11 @@ The TE-KOA application uses environment variables for configuration. These can b
 
 ## Application Configuration
 
-The application's behavior can be configured through the settings in `te_koa/configurations/settings.py`. This file contains various parameters that control the application's functionality.
+The application's behavior can be configured through the settings in `tekoa/configurations/settings.py`. This file contains various parameters that control the application's functionality.
 
 ### Data Loading Configuration
 
-The `DataLoader` class in `te_koa/io/data_loader.py` can be configured to load data from different sources:
+The `DataLoader` class in `tekoa/io/data_loader.py` can be configured to load data from different sources:
 
 ```python
 # Load data from an uploaded file (e.g., from Streamlit's file_uploader)

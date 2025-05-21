@@ -470,9 +470,9 @@ class DataLoader:
         Returns:
             Tuple of (processed DataFrame, pipeline results dictionary)
         """
-        from te_koa.utils.variable_screener import VariableScreener
-        from te_koa.utils.dimensionality_reducer import DimensionalityReducer
-        from te_koa.utils.data_quality_enhancer import DataQualityEnhancer
+        from tekoa.utils.variable_screener import VariableScreener
+        from tekoa.utils.dimensionality_reducer import DimensionalityReducer
+        from tekoa.utils.data_quality_enhancer import DataQualityEnhancer
 
         # Check if data is loaded
         if self.data is None:

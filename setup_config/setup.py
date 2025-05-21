@@ -56,12 +56,12 @@ with codecs.open(os.path.join(here, "requirements.txt"), encoding="utf-8") as fh
     requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
 # Package metadata
-PACKAGE_NAME = "te_koa"
+PACKAGE_NAME = "tekoa"
 VERSION      = "0.1.0"
 AUTHOR       = "Artin Majdi"
 AUTHOR_EMAIL = "msm2024@gmail.com"
 DESCRIPTION  = "A data science and machine learning framework for nursing research"
-URL          = "https://github.com/artinmajdi/te_koa"
+URL          = "https://github.com/artinmajdi/tekoa"
 LICENSE      = "MIT"
 
 # Classifiers for PyPI
@@ -104,8 +104,8 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'te_koa=te_koa.main:main',
-            'te_koa-dashboard=te_koa.cli:run_dashboard',
+            'tekoa=tekoa.main:main',
+            'tekoa-dashboard=tekoa.cli:run_dashboard',
         ],
     },
     keywords=[

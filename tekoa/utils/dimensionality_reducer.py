@@ -10,13 +10,11 @@ This module provides functionality for dimensionality reduction including:
 import logging
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from prince import FAMD
-from scipy.cluster.hierarchy import dendrogram, linkage
 
 logger = logging.getLogger(__name__)
 
@@ -140,14 +138,22 @@ class DimensionalityReducer:
             random_state: Random state for reproducibility.
 
         Returns:
-            Dictionary with FAMD results
+            Dictionary with FAMD results containing:
+            - 'famd_object'                  : The fitted FAMD object
+            - 'transformed_data'             : Transformed data (scores)
+            - 'explained_variance'           : Explained variance for each component
+            - 'cumulative_explained_variance': Cumulative explained variance
+            - 'variable_coordinates'         : Coordinates of variables in the component space
+            - 'samples_used'                 : Number of samples used in the analysis
         """
         # Prepare the data - FAMD requires all categorical columns to be of type 'category'
         data_for_famd = self.data.copy()
 
         # Convert categorical columns to category type
         for col in self.categorical_vars:
-            data_for_famd[col] = data_for_famd[col].astype('category')
+            if col in data_for_famd.columns:  # Only convert if column exists
+                data_for_famd[col] = data_for_famd[col].astype('category')
+
 
         # Handle missing values - drop rows with any missing values for now
         data_clean = data_for_famd.dropna()
@@ -161,17 +167,32 @@ class DimensionalityReducer:
 
         try:
             # Perform FAMD
-            famd = FAMD(n_components=n_components, random_state=random_state)
-            famd_results = famd.fit_transform(data_clean)
+            famd = FAMD(n_components=n_components, n_iter=10, random_state=random_state)
+            transformed_data = famd.fit_transform(data_clean)
+
+            # Get variable coordinates (correlations between variables and components)
+            # For FAMD, we'll use the column_correlations_ attribute if available
+            # Otherwise, we'll compute correlations manually
+            try:
+                variable_coords = famd.column_correlations_
+            except AttributeError:
+                # Compute correlations manually if the attribute doesn't exist
+                variable_coords = pd.DataFrame(
+                    np.corrcoef(data_clean.select_dtypes(include=[np.number]).values.T,
+                                transformed_data.values, rowvar=False)[:data_clean.shape[1], data_clean.shape[1]:],
+                    index=data_clean.columns,
+                    columns=[f'Dim{i+1}' for i in range(n_components)]
+                )
 
             # Store results
             self.famd_results = {
                 'famd_object': famd,
-                'transformed_data': famd_results,
+                'transformed_data': transformed_data,
                 'explained_variance': famd.explained_inertia_,
                 'cumulative_explained_variance': np.cumsum(famd.explained_inertia_),
-                'variable_coordinates': famd.column_correlations_,
-                'samples_used': len(data_clean)
+                'variable_coordinates': variable_coords,
+                'samples_used': len(data_clean),
+                'feature_names': data_clean.columns.tolist()
             }
 
             # Save results to the main results dict
@@ -180,7 +201,7 @@ class DimensionalityReducer:
             return self.famd_results
 
         except Exception as e:
-            logger.error(f"Error performing FAMD: {e}")
+            logger.error(f"Error performing FAMD: {e}", exc_info=True)
             return {}
 
     def get_component_loadings(self, method: str = 'pca') -> pd.DataFrame:
@@ -345,16 +366,26 @@ class DimensionalityReducer:
         variance_df = self.get_variance_explained(method)
 
         if variance_df.empty:
-            logger.warning(f"{method.upper()} results not available.")
-            return None, None
+            logger.warning(f"{method.upper()} results not available. Call perform_{method}() first.")
+            # Create an empty figure with a message
+            fig, ax = plt.subplots(figsize=figsize)
+            ax.text(0.5, 0.5,
+                   f"{method.upper()} results not available.\nPlease perform {method.upper()} first.",
+                   ha='center', va='center', transform=ax.transAxes)
+            ax.axis('off')
+            return fig, ax
 
         # Create the figure
         fig, ax1 = plt.subplots(figsize=figsize)
+
 
         # Plot individual explained variance
         ax1.bar(variance_df['Component'], variance_df['Explained_Variance'], alpha=0.7, label='Individual')
         ax1.set_ylabel('Explained Variance Ratio', color='b')
         ax1.tick_params(axis='y', labelcolor='b')
+
+        # Rotate x-axis labels for better readability
+        plt.setp(ax1.get_xticklabels(), rotation=45, ha='right')
 
         # Create a second y-axis for cumulative variance
         ax2 = ax1.twinx()
@@ -363,13 +394,18 @@ class DimensionalityReducer:
         ax2.tick_params(axis='y', labelcolor='r')
 
         # Add threshold line if optimal components determined
-        if self.optimal_components and self.results['optimal_components']['method'] == method:
-            threshold = self.results['optimal_components']['variance_threshold']
-            ax2.axhline(y=threshold, color='g', linestyle='--', alpha=0.7, label=f'{threshold*100}% Threshold')
+        if hasattr(self, 'optimal_components') and self.optimal_components and \
+           'optimal_components' in self.results and self.results['optimal_components'] and \
+           self.results['optimal_components'].get('method') == method:
+
+            threshold = self.results['optimal_components'].get('variance_threshold', 0.75)
+            ax2.axhline(y=threshold, color='g', linestyle='--', alpha=0.7,
+                       label=f'{threshold*100:.0f}% Threshold')
 
             # Highlight optimal number of components
             optimal = self.optimal_components
-            ax1.axvline(x=variance_df['Component'][optimal-1], color='g', linestyle='--', alpha=0.7)
+            if optimal <= len(variance_df):
+                ax1.axvline(x=optimal-1, color='g', linestyle='--', alpha=0.7)
 
         # Customize the plot
         ax1.set_title(f'Scree Plot - {method.upper()}')
@@ -378,7 +414,8 @@ class DimensionalityReducer:
         # Combine legends
         lines1, labels1 = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.1), ncol=3)
+        ax1.legend(lines1 + lines2, labels1 + labels2,
+                 loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3)
 
         plt.tight_layout()
 

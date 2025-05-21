@@ -20,8 +20,8 @@ To run the TE-KOA application using Docker:
 
 ```bash
 # Clone the repository (if you haven't already)
-git clone https://github.com/artinmajdi/te_koa.git
-cd te_koa
+git clone https://github.com/artinmajdi/tekoa.git
+cd tekoa
 
 # Build and start the Docker container
 docker compose up -d
@@ -37,7 +37,7 @@ The project includes a `docker-compose.yml` file that defines the services neede
 version: '3'
 
 services:
-  te_koa:
+  tekoa:
     build:
       context: .
       dockerfile: setup_config/docker/Dockerfile
@@ -48,7 +48,7 @@ services:
     environment:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_HEADLESS=true
-    command: streamlit run te_koa/visualization/app.py
+    command: streamlit run tekoa/visualization/app.py
 ```
 
 ## Environment Variables
@@ -129,7 +129,7 @@ You can mount a different dataset directory when running the container:
 
 ```bash
 # Mount a custom dataset directory
-docker run -p 8501:8501 -v /path/to/custom/dataset:/app/dataset te_koa
+docker run -p 8501:8501 -v /path/to/custom/dataset:/app/dataset tekoa
 ```
 
 ### Customizing the Container
@@ -138,7 +138,7 @@ You can customize the container by overriding the command:
 
 ```bash
 # Run with a custom command
-docker compose run te_koa python -m te_koa.cli
+docker compose run tekoa python -m tekoa.cli
 ```
 
 This allows you to run different components of the application within the same container.

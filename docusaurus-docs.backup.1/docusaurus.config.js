@@ -23,7 +23,7 @@ const config = {
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
   organizationName: 'artinmajdi', // Usually your GitHub org/user name.
-  projectName: 'te_koa', // Usually your repo name.
+  projectName: 'tekoa', // Usually your repo name.
 
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
@@ -46,7 +46,7 @@ const config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/artinmajdi/te_koa/tree/main/docusaurus-docs/',
+            'https://github.com/artinmajdi/tekoa/tree/main/docusaurus-docs/',
         },
         blog: {
           showReadingTime: true,
@@ -57,7 +57,7 @@ const config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/artinmajdi/te_koa/tree/main/docusaurus-docs/',
+            'https://github.com/artinmajdi/tekoa/tree/main/docusaurus-docs/',
           // Useful options to enforce blogging best practices
           onInlineTags: 'warn',
           onInlineAuthors: 'warn',
@@ -100,7 +100,7 @@ const config = {
             position: 'right',
           },
           {
-            href: 'https://github.com/artinmajdi/te_koa',
+            href: 'https://github.com/artinmajdi/tekoa',
             label: 'GitHub',
             position: 'right',
           },
@@ -148,7 +148,7 @@ const config = {
               },
               {
                 label: 'GitHub',
-                href: 'https://github.com/artinmajdi/te_koa',
+                href: 'https://github.com/artinmajdi/tekoa',
               },
             ],
           },

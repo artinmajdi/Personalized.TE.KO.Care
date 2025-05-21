@@ -39,7 +39,7 @@
 
 ---
 
-# TE-KOA (Transcranial Electrical Stimulation for Knee Osteoarthritis)
+# TEKOA (Transcranial Electrical Stimulation for Knee Osteoarthritis)
 
 **➡️ Live Dashboard: [https://tekoac.streamlit.app/](https://tekoac.streamlit.app/) ⬅️**
 
@@ -58,13 +58,13 @@ The TE-KOA project is designed to facilitate the analysis of clinical research d
 ## Project Structure
 
 ```
-te_koa/
+tekoa/
 ├── dataset/                  # Example dataset directory (Note: dashboard now relies on user uploads)
 ├── docs/                     # Documentation files
 ├── scripts/                  # Utility scripts
 ├── setup_config/             # Configuration files for setup
 │   └── docker/               # Docker configuration files
-├── te_koa/                   # Main package directory
+├── tekoa/                   # Main package directory
 │   ├── __init__.py           # Package initialization
 │   ├── cli.py                # Command-line interface
 │   ├── main.py               # Main entry point
@@ -135,13 +135,13 @@ To run the dashboard on your local machine and interact by uploading your own Ex
 # Navigate to the root directory of the project
 
 # Run the Streamlit dashboard
-python -m streamlit run te_koa/visualization/app.py
+python -m streamlit run tekoa/visualization/app.py
 ```
 
 Or use the CLI command (if the package is installed with `pip install -e .`):
 
 ```bash
-te_koa-dashboard
+tekoa-dashboard
 ```
 
 Access the dashboard in your browser, typically at `http://localhost:8501`.
@@ -151,7 +151,7 @@ Access the dashboard in your browser, typically at `http://localhost:8501`.
 While the dashboard focuses on user uploads, the `DataLoader` can still be used programmatically if you have a dataset path:
 
 ```python
-from te_koa.io.data_loader import DataLoader
+from tekoa.io.data_loader import DataLoader
 
 # Example: Assuming you have an Excel file at 'path/to/your_data.xlsx'
 # The file should contain 'Sheet1' for data and 'dictionary' for the data dictionary.

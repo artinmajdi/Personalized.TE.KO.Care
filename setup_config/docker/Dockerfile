@@ -39,4 +39,4 @@ ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Command to run the application (can be overridden in docker-compose.yml)
-CMD ["python", "-m", "te_koa.main"]
+CMD ["python", "-m", "tekoa.main"]

@@ -13,11 +13,10 @@ implementing all Phase I components including:
 
 import logging
 import streamlit as st
-from typing import Optional
 
-from te_koa.visualization.app_refactored_claude_components.data_manager import DataManager
-from te_koa.visualization.app_refactored_claude_components.ui_utils import apply_custom_css
-from te_koa.visualization.app_refactored_claude_components.pages import (
+from tekoa.visualization.data_manager import DataManager
+from tekoa.visualization.ui_utils import apply_custom_css
+from tekoa.visualization.pages import (
     HeaderComponent,
     SidebarComponent,
     OverviewPage,
@@ -33,20 +32,17 @@ from te_koa.visualization.app_refactored_claude_components.pages import (
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logging.basicConfig( level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s' )
 
 class Dashboard:
     """Enhanced dashboard for the TE-KOA-C clinical research dataset."""
 
     def __init__(self):
         """Initialize the TE-KOA dashboard component."""
+        logging.info("Initializing Dashboard...")
         self.data_manager = DataManager()
 
-    def render(self):
+    def run(self):
         """Render the TE-KOA-C dashboard."""
         # Set page config
         st.set_page_config(
@@ -137,7 +133,7 @@ class Dashboard:
 def main():
     """Main entry point for the TE-KOA dashboard."""
     dashboard = Dashboard()
-    dashboard.render()
+    dashboard.run()
 
 
 if __name__ == "__main__":

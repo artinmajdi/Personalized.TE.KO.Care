@@ -9,20 +9,15 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.express as px
-import plotly.graph_objects as go
-import seaborn as sns
-import io
-import base64
-from pathlib import Path
-import time
 import logging
-from typing import Dict, List, Optional, Tuple, Any, Union
 from wordcloud import WordCloud
 from scipy import stats as scipy_stats
 
-from te_koa.visualization.app_refactored_claude_components.data_manager import DataManager
-from te_koa.visualization.app_refactored_claude_components.ui_utils import (
-    COLOR_PALETTE, TREATMENT_COLORS, create_download_link,
+from tekoa.visualization.data_manager import DataManager
+from tekoa.visualization.ui_utils import (
+    COLOR_PALETTE,
+    TREATMENT_COLORS,
+    create_download_link,
     plot_correlation_network
 )
 
@@ -1726,6 +1721,12 @@ class DimensionalityPage:
         # Initialize dimensionality reducer
         data_manager.initialize_dimensionality_reducer()
 
+        # Initialize session state for dimensionality reduction results if not exists
+        if 'pca_results' not in st.session_state:
+            st.session_state.pca_results = None
+        if 'famd_results' not in st.session_state:
+            st.session_state.famd_results = None
+
         # Tab navigation for dimensionality reduction
         tabs = st.tabs(["PCA Analysis", "FAMD Analysis", "Component Interpretation", "Transformed Data"])
 
@@ -1792,11 +1793,17 @@ class DimensionalityPage:
                     with st.spinner("Performing PCA..."):
                         # Run PCA
                         pca_results = data_manager.perform_dimensionality_reduction(
-                            method='pca',
-                            variables=selected_vars,
-                            n_components=n_components,
-                            standardize=standardize
+                            method       = 'pca',
+                            variables    = selected_vars,
+                            n_components = n_components,
+                            standardize  = standardize
                         )
+                        # Store PCA results in session state
+                        st.session_state.pca_results = {
+                            'selected_vars' : selected_vars,
+                            'n_components'  : n_components,
+                            'standardize'   : standardize
+                        }
 
                         # Display results
                         st.success(f"PCA successfully performed with {n_components} components!")
@@ -1804,7 +1811,9 @@ class DimensionalityPage:
                         # Scree plot
                         st.subheader("Scree Plot")
                         fig, _ = data_manager.dimensionality_reducer.plot_scree(method='pca')
-                        st.pyplot(fig)
+                        if fig is not None:
+                            st.pyplot(fig)
+                            plt.close(fig)  # Close the figure to free memory
 
                         # Get optimal number of components
                         variance_threshold = 0.75  # 75% explained variance
@@ -1829,7 +1838,9 @@ class DimensionalityPage:
                         # Biplot for first two components
                         st.subheader("PCA Biplot (First Two Components)")
                         fig, _ = data_manager.dimensionality_reducer.plot_biplot(pc1=1, pc2=2, method='pca')
-                        st.pyplot(fig)
+                        if fig is not None:
+                            st.pyplot(fig)
+                            plt.close(fig)  # Close the figure to free memory
             else:
                 st.warning("Please select variables for PCA.")
 
@@ -1883,6 +1894,11 @@ class DimensionalityPage:
                                     variables=variables,
                                     n_components=n_components
                                 )
+                                # Store FAMD results in session state
+                                st.session_state.famd_results = {
+                                    'selected_vars': variables,
+                                    'n_components': n_components
+                                }
 
                                 # Display results
                                 st.success(f"FAMD successfully performed with {n_components} components!")
@@ -1890,7 +1906,9 @@ class DimensionalityPage:
                                 # Scree plot
                                 st.subheader("Scree Plot")
                                 fig, _ = data_manager.dimensionality_reducer.plot_scree(method='famd')
-                                st.pyplot(fig)
+                                if fig is not None:
+                                    st.pyplot(fig)
+                                    plt.close(fig)  # Close the figure to free memory
 
                                 # Get optimal number of components
                                 optimal_components = data_manager.dimensionality_reducer.get_optimal_components(
@@ -1955,10 +1973,33 @@ class DimensionalityPage:
                 # Check if method results are available
                 method_results_available = False
 
-                if method == "pca" and hasattr(data_manager.dimensionality_reducer, 'pca_results') and data_manager.dimensionality_reducer.pca_results:
-                    method_results_available = True
-                elif method == "famd" and hasattr(data_manager.dimensionality_reducer, 'famd_results') and data_manager.dimensionality_reducer.famd_results:
-                    method_results_available = True
+                # For PCA, check both session state and reducer
+                if method == "pca":
+                    if hasattr(data_manager.dimensionality_reducer, 'pca_results') and data_manager.dimensionality_reducer.pca_results:
+                        method_results_available = True
+                    elif st.session_state.pca_results:
+                        # Restore PCA results from session state
+                        pca_params = st.session_state.pca_results
+                        pca_results = data_manager.perform_dimensionality_reduction(
+                            method='pca',
+                            variables=pca_params['selected_vars'],
+                            n_components=pca_params['n_components'],
+                            standardize=pca_params['standardize']
+                        )
+                        method_results_available = True
+                # For FAMD, check both session state and reducer
+                elif method == "famd":
+                    if hasattr(data_manager.dimensionality_reducer, 'famd_results') and data_manager.dimensionality_reducer.famd_results:
+                        method_results_available = True
+                    elif st.session_state.famd_results:
+                        # Restore FAMD results from session state
+                        famd_params = st.session_state.famd_results
+                        famd_results = data_manager.perform_dimensionality_reduction(
+                            method='famd',
+                            variables=famd_params['selected_vars'],
+                            n_components=famd_params['n_components']
+                        )
+                        method_results_available = True
 
                 if method_results_available:
                     # Number of variables to show in loading plot
@@ -3586,7 +3627,7 @@ class ClusteringPage:
             optimal_famd_info = dr_results.get('optimal_components', {})
             if optimal_famd_info.get('method') == 'famd':
                  optimal_famd_components_from_dr = optimal_famd_info.get('optimal_number', 0)
-            if optimal_famd_components_from_dr == 0 and dr_results.get('n_components'): 
+            if optimal_famd_components_from_dr == 0 and dr_results.get('n_components'):
                 optimal_famd_components_from_dr = dr_results.get('n_components', 5)
 
 
@@ -3597,28 +3638,28 @@ class ClusteringPage:
             st.stop()
 
         st.subheader("Clustering Configuration")
-        
+
         col1, col2, col3 = st.columns(3)
         with col1:
             k_min = st.number_input("Min number of clusters (k)", min_value=2, max_value=10, value=2, step=1, key="k_min_cluster")
         with col2:
             k_max = st.number_input("Max number of clusters (k)", min_value=k_min, max_value=15, value=max(k_min, 6), step=1, key="k_max_cluster")
-        
+
         k_list = list(range(k_min, k_max + 1))
 
-        default_optimal_components = 5 
+        default_optimal_components = 5
         if optimal_famd_components_from_dr > 0:
             default_optimal_components = optimal_famd_components_from_dr
-        
+
         with col3:
             optimal_famd_components_count_input = st.number_input(
-                "Number of FAMD Components for Clustering", 
-                min_value=2, 
-                value=default_optimal_components, 
+                "Number of FAMD Components for Clustering",
+                min_value=2,
+                value=default_optimal_components,
                 help="Number of FAMD components to use as input for clustering. "
                      "This should typically match the number of components chosen or determined as optimal from the FAMD analysis."
             )
-        
+
         random_state_clustering = st.number_input("Random State for Clustering", value=42, step=1, key="random_state_cluster")
 
         if st.button("🚀 Run All Clustering Algorithms", key="run_all_clustering_button"):
@@ -3627,15 +3668,15 @@ class ClusteringPage:
             else:
                 with st.spinner("Running clustering analyses... This may take a few minutes."):
                     success = data_manager.run_all_clustering_analyses(
-                        k_list=k_list, 
-                        optimal_famd_components_count=optimal_famd_components_count_input, 
+                        k_list=k_list,
+                        optimal_famd_components_count=optimal_famd_components_count_input,
                         random_state=random_state_clustering
                     )
                 if success:
                     st.success("Clustering analyses completed!")
                 else:
                     st.error("Clustering analyses encountered errors. Check logs if available, or ensure prior steps (like FAMD) were successful.")
-                st.rerun() 
+                st.rerun()
 
         st.markdown("---")
         st.subheader("Clustering Results & Validation")
@@ -3665,7 +3706,7 @@ class ClusteringPage:
                     continue
 
                 k_values_for_algo = sorted(algo_results_for_k_values.keys())
-                
+
                 metrics_data = []
                 for k_val in k_values_for_algo:
                     res = algo_results_for_k_values[k_val]
@@ -3679,7 +3720,7 @@ class ClusteringPage:
 
                 if not metrics_df.empty:
                     st.markdown("##### Performance Metrics vs. Number of Clusters (k)")
-                    
+
                     native_score_name = "Inertia"
                     if algo_name == 'gmm': native_score_name = "BIC (lower is better)"
                     elif algo_name == 'pam': native_score_name = "Inertia (PAM)"
@@ -3693,7 +3734,7 @@ class ClusteringPage:
                             st.plotly_chart(fig_sil, use_container_width=True)
                         else:
                             st.write("Silhouette scores not available or all NaN.")
-                        
+
                         valid_k_for_native = [k for k in k_values_for_algo if algo_results_for_k_values[k].get('native_score') is not None and not np.isnan(algo_results_for_k_values[k].get('native_score'))]
                         if valid_k_for_native:
                             plot_native_df = metrics_df[metrics_df['k'].isin(valid_k_for_native)]
@@ -3710,18 +3751,18 @@ class ClusteringPage:
                             st.plotly_chart(fig_db, use_container_width=True)
                         else:
                             st.write("Davies-Bouldin scores not available or all NaN.")
-                
+
                     st.markdown("---")
                     st.markdown("##### Detailed View for Selected k")
-                    
+
                     valid_k_options = [k for k in k_values_for_algo if algo_results_for_k_values[k].get('labels') is not None and len(algo_results_for_k_values[k].get('labels')) > 0]
                     if not valid_k_options:
                         st.write(f"No valid cluster labels found for {algo_name.upper()} to select k.")
                         continue
 
                     selected_k_algo = st.selectbox(
-                        f"Select k for {algo_name.upper()} detailed view", 
-                        options=valid_k_options, 
+                        f"Select k for {algo_name.upper()} detailed view",
+                        options=valid_k_options,
                         key=f"select_k_{algo_name}"
                     )
 
@@ -3738,13 +3779,13 @@ class ClusteringPage:
                                     plot_df_scatter = famd_comps_for_plot.iloc[:, [0, 1]].copy()
                                     plot_df_scatter.columns = ['Component 1', 'Component 2']
                                     plot_df_scatter['Cluster'] = labels.astype(str)
-                                    
+
                                     fig_scatter = px.scatter(
-                                        plot_df_scatter, 
-                                        x='Component 1', y='Component 2', 
-                                        color='Cluster', 
+                                        plot_df_scatter,
+                                        x='Component 1', y='Component 2',
+                                        color='Cluster',
                                         title=f'{algo_name.upper()} - Clusters on First Two FAMD Components (k={selected_k_algo})',
-                                        color_discrete_sequence=px.colors.qualitative.Plotly 
+                                        color_discrete_sequence=px.colors.qualitative.Plotly
                                     )
                                     st.plotly_chart(fig_scatter, use_container_width=True)
                                 elif famd_comps_for_plot.shape[1] == 1: # Handle 1D case for scatter

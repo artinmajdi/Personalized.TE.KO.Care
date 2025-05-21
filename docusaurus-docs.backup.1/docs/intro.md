@@ -47,8 +47,8 @@ This documentation is organized into several sections:
 
 ## Quick Links
 
-- [GitHub Repository](https://github.com/artinmajdi/te_koa) - Source code repository
+- [GitHub Repository](https://github.com/artinmajdi/tekoa) - Source code repository
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/artinmajdi/te_koa/blob/main/LICENSE.md) file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/artinmajdi/tekoa/blob/main/LICENSE.md) file for details.

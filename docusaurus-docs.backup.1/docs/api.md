@@ -13,7 +13,7 @@ This page documents the key classes and functions in the TE-KOA project that you
 The `DataLoader` class is responsible for loading and preprocessing clinical trial data.
 
 ```python
-from te_koa.io.data_loader import DataLoader
+from tekoa.io.data_loader import DataLoader
 ```
 
 #### Constructor
@@ -23,6 +23,7 @@ DataLoader(uploaded_file=None, data_dir=None)
 ```
 
 **Parameters:**
+
 - `uploaded_file`: A file-like object (e.g., from Streamlit's file_uploader) containing the Excel data.
 - `data_dir`: Directory path containing the Excel data file (used if uploaded_file is not provided).
 
@@ -33,30 +34,37 @@ As noted in the project memory, the `DataLoader` class prioritizes loading data 
 ```python
 load_data()
 ```
+
 Loads data from the specified source (uploaded file or data directory).
 
 **Returns:**
+
 - `data`: Pandas DataFrame containing the clinical data.
 - `data_dict`: Pandas DataFrame containing the data dictionary.
 
 ```python
 get_missing_data_report()
 ```
+
 Generates a report of missing values in the dataset.
 
 **Returns:**
+
 - Pandas DataFrame with missing data statistics for each variable.
 
 ```python
 impute_missing_values(method='mean', **kwargs)
 ```
+
 Imputes missing values in the dataset.
 
 **Parameters:**
+
 - `method`: Imputation method to use ('mean', 'median', 'knn', etc.).
 - `**kwargs`: Additional parameters for the imputation method.
 
 **Returns:**
+
 - Pandas DataFrame with imputed values.
 
 ## Data Analysis
@@ -66,18 +74,21 @@ Imputes missing values in the dataset.
 Functions for analyzing the data dictionary.
 
 ```python
-from te_koa.io.analyze_dictionary import get_dictionary_summary
+from tekoa.io.analyze_dictionary import get_dictionary_summary
 ```
 
 ```python
 get_dictionary_summary(data_dict)
 ```
+
 Generates a summary of the data dictionary.
 
 **Parameters:**
+
 - `data_dict`: Pandas DataFrame containing the data dictionary.
 
 **Returns:**
+
 - Dictionary with summary statistics about the data dictionary.
 
 ### analyze_excel_file
@@ -85,18 +96,21 @@ Generates a summary of the data dictionary.
 Functions for analyzing Excel files.
 
 ```python
-from te_koa.io.analyze_excel_file import get_excel_structure
+from tekoa.io.analyze_excel_file import get_excel_structure
 ```
 
 ```python
 get_excel_structure(file_path)
 ```
+
 Analyzes the structure of an Excel file.
 
 **Parameters:**
+
 - `file_path`: Path to the Excel file.
 
 **Returns:**
+
 - Dictionary with information about the Excel file structure.
 
 ## Visualization
@@ -106,12 +120,13 @@ Analyzes the structure of an Excel file.
 The main Streamlit application module.
 
 ```python
-from te_koa.visualization.app import run_app
+from tekoa.visualization.app import run_app
 ```
 
 ```python
 run_app()
 ```
+
 Runs the Streamlit dashboard application.
 
 ## Command Line Interface
@@ -121,12 +136,13 @@ Runs the Streamlit dashboard application.
 Command-line interface for the TE-KOA project.
 
 ```python
-from te_koa.cli import main
+from tekoa.cli import main
 ```
 
 ```python
 main()
 ```
+
 Runs the command-line interface.
 
 ## Configuration
@@ -136,15 +152,17 @@ Runs the command-line interface.
 Application settings and configuration.
 
 ```python
-from te_koa.configurations.settings import get_settings
+from tekoa.configurations.settings import get_settings
 ```
 
 ```python
 get_settings()
 ```
+
 Returns the application settings.
 
 **Returns:**
+
 - Dictionary containing application settings.
 
 ### params
@@ -152,15 +170,17 @@ Returns the application settings.
 Parameter definitions for the application.
 
 ```python
-from te_koa.configurations.params import get_params
+from tekoa.configurations.params import get_params
 ```
 
 ```python
 get_params()
 ```
+
 Returns the application parameters.
 
 **Returns:**
+
 - Dictionary containing application parameters.
 
 ## Example Usage
@@ -168,7 +188,7 @@ Returns the application parameters.
 Here's an example of how to use the TE-KOA API programmatically:
 
 ```python
-from te_koa.io.data_loader import DataLoader
+from tekoa.io.data_loader import DataLoader
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -195,4 +215,4 @@ plt.ylabel('Frequency')
 plt.show()
 ```
 
-For more detailed examples and usage patterns, refer to the [Dashboard Guide](dashboard) and the code documentation in the [GitHub repository](https://github.com/artinmajdi/te_koa).
+For more detailed examples and usage patterns, refer to the [Dashboard Guide](dashboard) and the code documentation in the [GitHub repository](https://github.com/artinmajdi/tekoa).

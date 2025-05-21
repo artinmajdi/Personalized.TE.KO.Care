@@ -13,12 +13,13 @@ You can access the TE-KOA dashboard in two ways:
 1. **Live Dashboard**: Visit [https://tekoac.streamlit.app/](https://tekoac.streamlit.app/) to access the publicly hosted version.
 
 2. **Local Installation**: Run the dashboard locally after [installing the project](installation):
+
    ```bash
    # Using the Python module
-   python -m streamlit run te_koa/visualization/app.py
-   
+   python -m streamlit run tekoa/visualization/app.py
+
    # Or using the CLI command
-   te_koa-dashboard
+   tekoa-dashboard
    ```
 
 ## Dashboard Features
@@ -28,6 +29,7 @@ The TE-KOA dashboard provides several features for data analysis:
 ### 1. Data Upload
 
 The dashboard allows you to upload your own Excel files for analysis. The file should contain:
+
 - A data sheet (typically 'Sheet1') with your clinical data
 - A 'dictionary' sheet that describes the variables in your dataset
 
@@ -36,6 +38,7 @@ As noted in the project memory, the `DataLoader` class prioritizes loading data 
 ### 2. Data Overview
 
 The overview section provides basic information about your dataset:
+
 - Number of observations and variables
 - Data types for each variable
 - Summary of missing values
@@ -43,6 +46,7 @@ The overview section provides basic information about your dataset:
 ### 3. Data Explorer
 
 The data explorer allows you to:
+
 - View the raw data in a tabular format
 - Filter and sort the data
 - View basic statistics for each variable
@@ -54,6 +58,7 @@ The data dictionary section displays the definitions and metadata for each varia
 ### 5. Visualizations
 
 The dashboard offers various visualization options:
+
 - Histograms for viewing the distribution of variables
 - Box plots for comparing distributions across groups
 - Scatter plots for examining relationships between variables
@@ -62,6 +67,7 @@ The dashboard offers various visualization options:
 ### 6. Missing Data & Imputation
 
 This section helps you:
+
 - Identify variables with missing values
 - Visualize patterns of missing data
 - Impute missing values using different methods (mean, median, KNN, etc.)
@@ -69,6 +75,7 @@ This section helps you:
 ### 7. Variable Screening
 
 The variable screening tools help you identify problematic variables:
+
 - Variables with near-zero variance
 - Variables with high collinearity
 - Variables with excessive missing values
@@ -84,6 +91,7 @@ The data quality section helps you assess and enhance the quality of your datase
 ### 10. Treatment Groups
 
 This section provides tools for analyzing treatment groups and their outcomes, including:
+
 - Comparison of baseline characteristics
 - Analysis of treatment effects
 - Visualization of outcomes by group
@@ -132,4 +140,4 @@ If you encounter issues with the dashboard:
 - **Performance Issues**: Large datasets may cause performance issues; consider filtering your data
 - **Browser Compatibility**: The dashboard works best with modern browsers (Chrome, Firefox, Edge)
 
-For persistent issues, please report them on the [GitHub repository](https://github.com/artinmajdi/te_koa/issues).
+For persistent issues, please report them on the [GitHub repository](https://github.com/artinmajdi/tekoa/issues).

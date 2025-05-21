@@ -34,8 +34,8 @@ Once your virtual environment is activated, you can install the TE-KOA package:
 
 ```bash
 # Clone the repository (if you haven't already)
-git clone https://github.com/artinmajdi/te_koa.git
-cd te_koa
+git clone https://github.com/artinmajdi/tekoa.git
+cd tekoa
 
 # Install dependencies
 pip install -r requirements.txt
@@ -50,13 +50,13 @@ To verify that the installation was successful, you can run the Streamlit dashbo
 
 ```bash
 # Run the Streamlit dashboard
-python -m streamlit run te_koa/visualization/app.py
+python -m streamlit run tekoa/visualization/app.py
 ```
 
 Or use the CLI command (if the package is installed with `pip install -e .`):
 
 ```bash
-te_koa-dashboard
+tekoa-dashboard
 ```
 
 You should be able to access the dashboard in your browser, typically at `http://localhost:8501`.

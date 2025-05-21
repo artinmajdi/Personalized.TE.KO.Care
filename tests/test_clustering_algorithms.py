@@ -12,11 +12,11 @@ try:
 except ModuleNotFoundError:
     SKLEARN_EXTRA_AVAILABLE = False
 
-from te_koa.utils.clustering_algorithms import perform_kmeans, perform_pam, perform_gmm
+from tekoa.utils.clustering_algorithms import perform_kmeans, perform_pam, perform_gmm
 
 # Configure logger for capturing messages in tests
 # Get the logger used in the module to be tested
-clustering_logger = logging.getLogger('te_koa.utils.clustering_algorithms')
+clustering_logger = logging.getLogger('tekoa.utils.clustering_algorithms')
 
 class TestClusteringAlgorithms(unittest.TestCase):
 
@@ -68,12 +68,12 @@ class TestClusteringAlgorithms(unittest.TestCase):
             # Temporarily disable logging capture for the success case or ensure logger level is high enough
             # to not capture INFO/DEBUG if any were added.
             # For this test, we only care about the ERROR case above.
-            
+
             # Ensure no error logs are generated when sklearn-extra is available
             # We can do this by checking that no ERROR messages are logged during the call.
             with self.assertNoLogs(logger=clustering_logger, level='ERROR'):
                 model, labels = perform_pam(self.test_data, n_clusters=2, random_state=0)
-            
+
             self.assertIsNotNone(model)
             self.assertIsInstance(model, KMedoids)
             self.assertIsInstance(labels, np.ndarray)
@@ -83,6 +83,6 @@ class TestClusteringAlgorithms(unittest.TestCase):
 if __name__ == '__main__':
     # Ensure the logger is configured to capture messages if tests are run directly
     # This is mainly for the PAM test when sklearn-extra is not installed
-    logging.basicConfig() 
+    logging.basicConfig()
     clustering_logger.setLevel(logging.INFO) # Ensure it captures ERROR and INFO
     unittest.main()

@@ -5,7 +5,7 @@ from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
 from unittest.mock import Mock, patch # patch can be used for more complex scenarios
 
-from te_koa.utils.clustering_validation import (
+from tekoa.utils.clustering_validation import (
     calculate_silhouette_score,
     calculate_davies_bouldin_score,
     calculate_model_native_score
@@ -13,7 +13,7 @@ from te_koa.utils.clustering_validation import (
 import logging
 
 # Get the logger used in the module to be tested
-validation_logger = logging.getLogger('te_koa.utils.clustering_validation')
+validation_logger = logging.getLogger('tekoa.utils.clustering_validation')
 
 class TestClusteringValidation(unittest.TestCase):
 
@@ -72,11 +72,11 @@ class TestClusteringValidation(unittest.TestCase):
         """Test native score for PAM without inertia."""
         # Create a mock that will not have 'inertia_' unless explicitly set.
         # Using spec=[] means it has no attributes by default.
-        mock_pam_model_no_inertia = Mock(spec=[]) 
-        
+        mock_pam_model_no_inertia = Mock(spec=[])
+
         with self.assertLogs(logger=validation_logger, level='WARNING') as cm:
             score = calculate_model_native_score(mock_pam_model_no_inertia, self.test_data, model_type='pam')
-        
+
         self.assertTrue(np.isnan(score))
         self.assertTrue(
             any("PAM model does not have an 'inertia_' attribute" in message for message in cm.output)
@@ -87,7 +87,7 @@ class TestClusteringValidation(unittest.TestCase):
         mock_gmm_model = Mock(spec=GaussianMixture)
         # Mock the bic method, ensuring it's callable
         mock_gmm_model.bic = Mock(return_value=250.75)
-        
+
         score = calculate_model_native_score(mock_gmm_model, self.test_data, model_type='gmm')
         self.assertEqual(score, 250.75)
         mock_gmm_model.bic.assert_called_once_with(self.test_data)
