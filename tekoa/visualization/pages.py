@@ -3613,197 +3613,298 @@ class PipelinePage:
 class ClusteringPage:
     """Clustering page component for Phase II: Phenotype Discovery."""
 
+
     @staticmethod
-    def render(data_manager: DataManager):
-        """Render the clustering page."""
-        st.header("Clustering (Phase II): Phenotype Discovery")
-
-        # Check if FAMD has been run
-        famd_done = False
-        dr_results = st.session_state.pipeline_results.get('dimensionality_reduction', {})
-        optimal_famd_components_from_dr = 0
-        if dr_results.get('method') == 'famd' and dr_results.get('transformed_data_shape') is not None:
-            famd_done = True
-            optimal_famd_info = dr_results.get('optimal_components', {})
-            if optimal_famd_info.get('method') == 'famd':
-                 optimal_famd_components_from_dr = optimal_famd_info.get('optimal_number', 0)
-            if optimal_famd_components_from_dr == 0 and dr_results.get('n_components'):
-                optimal_famd_components_from_dr = dr_results.get('n_components', 5)
-
-
-        if not famd_done:
-            st.warning("FAMD has not been successfully run, or its results are not available. "
-                       "Please run FAMD from the 'Dimensionality Reduction' page first.")
-            st.info("Clustering requires the output components from FAMD to define the input space.")
-            st.stop()
-
-        st.subheader("Clustering Configuration")
-
+    def _get_clustering_config(optimal_famd_components_from_dr):
+        # Create columns for the clustering configuration
         col1, col2, col3 = st.columns(3)
         with col1:
             k_min = st.number_input("Min number of clusters (k)", min_value=2, max_value=10, value=2, step=1, key="k_min_cluster")
+
         with col2:
             k_max = st.number_input("Max number of clusters (k)", min_value=k_min, max_value=15, value=max(k_min, 6), step=1, key="k_max_cluster")
 
+        # Create a list of k values to use for clustering
         k_list = list(range(k_min, k_max + 1))
 
+        # Set the default number of optimal FAMD components
         default_optimal_components = 5
         if optimal_famd_components_from_dr > 0:
             default_optimal_components = optimal_famd_components_from_dr
 
+        # Create a number input for the number of FAMD components to use for clustering
         with col3:
             optimal_famd_components_count_input = st.number_input(
                 "Number of FAMD Components for Clustering",
-                min_value=2,
-                value=default_optimal_components,
-                help="Number of FAMD components to use as input for clustering. "
-                     "This should typically match the number of components chosen or determined as optimal from the FAMD analysis."
+                min_value = 2,
+                value     = default_optimal_components,
+                step      = 1,
+                key       = "optimal_famd_components_count",
+                help      = "Number of FAMD components to use as input for clustering.  \n This should typically match the number of components chosen or determined as optimal from the FAMD analysis." )
+
+        return k_list, optimal_famd_components_count_input
+
+
+    @staticmethod
+    def _check_famd():
+
+        # Get the optimal FAMD components from the dimensionality reduction results
+        optimal_famd_components_from_dr = 0
+        famd_done = False
+
+        # Get the dimensionality reduction results
+        dr_results = st.session_state.pipeline_results.get('dimensionality_reduction', {})
+
+        # Check if FAMD has been run and if the transformed data shape is available
+        if dr_results.get('method') == 'famd' and dr_results.get('transformed_data_shape') is not None:
+            famd_done = True
+            optimal_famd_info = dr_results.get('optimal_components', {})
+
+            # Check if the optimal FAMD components are available
+            if optimal_famd_info.get('method') == 'famd':
+                optimal_famd_components_from_dr = optimal_famd_info.get('optimal_number', 0)
+
+            # Check if the number of components is available
+            if optimal_famd_components_from_dr == 0 and dr_results.get('n_components'):
+                optimal_famd_components_from_dr = dr_results.get('n_components', 5)
+
+        # Check if FAMD has been run and if the transformed data shape is available
+        if not famd_done:
+            st.warning("FAMD has not been successfully run, or its results are not available. "
+                        "Please run FAMD from the 'Dimensionality Reduction' page first.")
+            st.info("Clustering requires the output components from FAMD to define the input space.")
+            st.stop()
+
+        return optimal_famd_components_from_dr
+
+
+    @staticmethod
+    def _iterate_over_each_algorithm(algo_map, clustering_results_all_algos):
+
+        def _create_list_of_metric(algo_results_for_k_values):
+
+            # Get the k values for this algorithm
+            k_values_for_algo = sorted(algo_results_for_k_values.keys())
+
+            metrics_data = []
+            for k_val in k_values_for_algo:
+
+                # Get the results for this k value
+                res = algo_results_for_k_values[k_val]
+
+                # Add the metrics data to the list
+                metrics_data.append({
+                    'k'             : k_val,
+                    'Silhouette'    : res.get('silhouette', np.nan),
+                    'Davies-Bouldin': res.get('davies_bouldin', np.nan),
+                    'NativeScore'   : res.get('native_score', np.nan)
+                })
+
+            metrics_df = pd.DataFrame(metrics_data)
+            return metrics_df, k_values_for_algo
+
+        def _check_alg_results(algo_name):
+
+            algo_results_for_k_values = clustering_results_all_algos.get(algo_name, {})
+
+            # Check if there are any results for this algorithm
+            if not algo_results_for_k_values:
+                # Display a message if there are no results for this algorithm
+                st.write("No results found for this algorithm. It might have failed or not run.")
+
+                # Check if PAM clustering is being used
+                if algo_name == 'pam':
+                    try:
+                        import sklearn_extra.cluster
+                    except ModuleNotFoundError:
+                        st.warning("PAM clustering requires 'scikit-learn-extra'. Please install it: `pip install scikit-learn-extra`")
+                return None, None
+
+            metrics_df, k_values_for_algo = _create_list_of_metric(algo_results_for_k_values)
+
+            # Check if there are any metrics to display
+            if metrics_df.empty:
+                st.write(f"No metrics data to display for {algo_name.upper()}. Please ensure the analysis ran correctly for at least one k value.")
+                return None, None, None
+
+            return metrics_df, k_values_for_algo, algo_results_for_k_values
+
+        def _plot_performance_vs_n_clusters(metrics_df, algo_name, algo_results_for_k_values, k_values_for_algo):
+
+            def _get_valid_k_for_metric(metric_name: str, y: str, title: str):
+                valid_k_for_metric = [k for k in k_values_for_algo if algo_results_for_k_values[k].get(metric_name) is not None and not np.isnan(algo_results_for_k_values[k].get(metric_name))]
+
+                if valid_k_for_metric:
+                    plot_sil_df = metrics_df[metrics_df['k'].isin(valid_k_for_metric)]
+                    fig_sil     = px.line(plot_sil_df, x='k', y=y, title=f'{title} Score vs. k', markers=True)
+                    st.plotly_chart(fig_sil, use_container_width=True)
+
+                else:
+                    st.write(f"{title} scores not available or all NaN.")
+
+            st.markdown("##### Performance Metrics vs. Number of Clusters (k)")
+
+            # Set the native score name based on the algorithm
+            native_score_name = "Inertia"
+            if   algo_name == 'gmm': native_score_name = "BIC (lower is better)"
+            elif algo_name == 'pam': native_score_name = "Inertia (PAM)"
+
+            # Create two columns for the plots
+            col_plots1, col_plots2 = st.columns(2)
+            with col_plots1:
+                _get_valid_k_for_metric(metric_name='silhouette', y='Silhouette', title='Silhouette Score')
+                _get_valid_k_for_metric(metric_name='native_score', y='NativeScore', title=native_score_name)
+
+            with col_plots2:
+                _get_valid_k_for_metric(metric_name='davies_bouldin', y='Davies-Bouldin', title='Davies-Bouldin')
+
+            st.markdown("---")
+
+        def _detailed_view_for_selected_k(algo_name, algo_results_for_k_values, k_values_for_algo):
+
+            st.markdown("##### Detailed View for Selected k")
+
+            valid_k_options = [k for k in k_values_for_algo if algo_results_for_k_values[k].get('labels') is not None and len(algo_results_for_k_values[k].get('labels')) > 0]
+            if not valid_k_options:
+                st.write(f"No valid cluster labels found for {algo_name.upper()} to select k.")
+                return
+
+            selected_k_algo = st.selectbox(
+                label   = f"Select k for {algo_name.upper()} detailed view",
+                options = valid_k_options,
+                key     = f"select_k_{algo_name}"
             )
 
-        random_state_clustering = st.number_input("Random State for Clustering", value=42, step=1, key="random_state_cluster")
+            # Check if a k is selected (it will be if valid_k_options is not empty)
+            if selected_k_algo:
 
-        if st.button("🚀 Run All Clustering Algorithms", key="run_all_clustering_button"):
-            if not k_list:
-                st.error("K list is empty. Ensure Min k <= Max k.")
-            else:
-                with st.spinner("Running clustering analyses... This may take a few minutes."):
-                    success = data_manager.run_all_clustering_analyses(
-                        k_list=k_list,
-                        optimal_famd_components_count=optimal_famd_components_count_input,
-                        random_state=random_state_clustering
+                # Get the cluster labels for the selected k
+                labels = data_manager.get_cluster_labels_for_run(algo_name, selected_k_algo)
+
+                # Check if labels are valid
+                if not( labels is not None and len(labels) > 0):
+                    st.write(f"No labels found for {algo_name.upper()} with k={selected_k_algo}.")
+                    return
+
+                # Get the cluster sizes
+                cluster_counts = pd.Series(labels).value_counts().sort_index()
+                st.write(f"**Cluster Sizes for k={selected_k_algo}:**")
+                st.dataframe(cluster_counts.rename("Participant Count"))
+
+                # Plot the clusters on the first two FAMD components
+                if not (data_manager.clustering_manager and hasattr(data_manager.clustering_manager, 'data') and data_manager.clustering_manager.data is not None):
+                    st.write("Clustered data (FAMD components) not available for scatter plot. This might happen if 'Run All Clustering Algorithms' was not run successfully in this session.")
+                    return
+
+                # Get the FAMD components
+                famd_comps_for_plot = data_manager.clustering_manager.data
+
+                # Check if there are at least 2 components
+                if famd_comps_for_plot.shape[1] >= 2:
+
+                    # Create a scatter plot of the clusters
+                    plot_df_scatter = famd_comps_for_plot.iloc[:, [0, 1]].copy()
+                    plot_df_scatter.columns = ['Component 1', 'Component 2']
+                    plot_df_scatter['Cluster'] = labels.astype(str)
+
+                    fig_scatter = px.scatter(
+                        plot_df_scatter,
+                        x='Component 1', y='Component 2',
+                        color='Cluster',
+                        title=f'{algo_name.upper()} - Clusters on First Two FAMD Components (k={selected_k_algo})',
+                        color_discrete_sequence=px.colors.qualitative.Plotly
                     )
-                if success:
-                    st.success("Clustering analyses completed!")
+                    st.plotly_chart(fig_scatter, use_container_width=True)
+
+                elif famd_comps_for_plot.shape[1] == 1: # Handle 1D case for scatter
+                    plot_df_scatter = pd.DataFrame({'Component 1': famd_comps_for_plot.iloc[:,0], 'Cluster': labels.astype(str), 'Y': np.zeros(len(labels))})
+                    fig_scatter = px.scatter(
+                        data_frame              = plot_df_scatter,
+                        x                       = 'Component 1',
+                        y                       = 'Y',
+                        color                   = 'Cluster',
+                        title                   = f'{algo_name.upper()} - Clusters on First FAMD Component (k={selected_k_algo})',
+                        color_discrete_sequence = px.colors.qualitative.Plotly
+                    )
+                    fig_scatter.update_layout(yaxis_visible=False, yaxis_showticklabels=False)
+                    st.plotly_chart(fig_scatter, use_container_width=True)
+
                 else:
-                    st.error("Clustering analyses encountered errors. Check logs if available, or ensure prior steps (like FAMD) were successful.")
-                st.rerun()
+                    st.write("Not enough FAMD components (need at least 1) in the clustered data to display scatter plot.")
+
+
+        # Iterate over each algorithm and its results
+        for algo_name, tab_content in algo_map.items():
+
+            # Display the results for each algorithm in a tab
+            with tab_content:
+
+                st.markdown(f"#### Results for {algo_name.upper()}")
+
+                metrics_df, k_values_for_algo, algo_results_for_k_values = _check_alg_results(algo_name)
+
+                if metrics_df is None or k_values_for_algo is None or algo_results_for_k_values is None:
+                    continue
+
+                _plot_performance_vs_n_clusters(metrics_df, algo_name, algo_results_for_k_values, k_values_for_algo)
+
+                _detailed_view_for_selected_k(algo_name, algo_results_for_k_values, k_values_for_algo)
+
+
+    @staticmethod
+    def render(data_manager: DataManager):
+        """Render the clustering page."""
+
+        def _run_clustering_button(optimal_famd_components_from_dr):
+
+            k_list, optimal_famd_components_count_input = ClusteringPage._get_clustering_config(optimal_famd_components_from_dr)
+
+            # Create a number input for the random state for clustering
+            random_state_clustering = st.number_input("Random State for Clustering", value=42, step=1, key="random_state_cluster")
+
+            # Create a button to run all clustering algorithms
+            if st.button("🚀 Run All Clustering Algorithms", key="run_all_clustering_button"):
+
+                # Check if the k list is empty
+                if not k_list:
+                    st.error("K list is empty. Ensure Min k <= Max k.")
+
+                else:
+
+                    with st.spinner("Running clustering analyses... This may take a few minutes."):
+                        success = data_manager.run_all_clustering_analyses(
+                            k_list=k_list,
+                            optimal_famd_components_count=optimal_famd_components_count_input,
+                            random_state=random_state_clustering
+                        )
+
+                    if success:
+                        st.success("Clustering analyses completed!")
+
+                    else:
+                        st.error("Clustering analyses encountered errors. Check logs if available, or ensure prior steps (like FAMD) were successful.")
+                    st.rerun()
+
+        st.header("Clustering (Phase II): Phenotype Discovery")
+        optimal_famd_components_from_dr = ClusteringPage._check_famd()
+
+
+        st.subheader("Clustering Configuration")
+        _run_clustering_button(optimal_famd_components_from_dr)
+
 
         st.markdown("---")
         st.subheader("Clustering Results & Validation")
-
         clustering_results_all_algos = data_manager.get_all_clustering_results()
 
+        # Check if there are any clustering results
         if not clustering_results_all_algos:
             st.info("No clustering results to display. Run the analyses first using the button above.")
             st.stop()
 
+        # Create tabs for each clustering algorithm
         algo_tabs = st.tabs(["K-Means", "PAM", "Gaussian Mixture (GMM)"])
         algo_map = {'kmeans': algo_tabs[0], 'pam': algo_tabs[1], 'gmm': algo_tabs[2]}
 
-        for algo_name, tab_content in algo_map.items():
-            with tab_content:
-                st.markdown(f"#### Results for {algo_name.upper()}")
-                algo_results_for_k_values = clustering_results_all_algos.get(algo_name, {})
-
-                if not algo_results_for_k_values:
-                    st.write("No results found for this algorithm. It might have failed or not run.")
-                    if algo_name == 'pam':
-                        try:
-                            import sklearn_extra.cluster
-                        except ModuleNotFoundError:
-                            st.warning("PAM clustering requires 'scikit-learn-extra'. "
-                                       "Please install it: `pip install scikit-learn-extra`")
-                    continue
-
-                k_values_for_algo = sorted(algo_results_for_k_values.keys())
-
-                metrics_data = []
-                for k_val in k_values_for_algo:
-                    res = algo_results_for_k_values[k_val]
-                    metrics_data.append({
-                        'k': k_val,
-                        'Silhouette': res.get('silhouette', np.nan),
-                        'Davies-Bouldin': res.get('davies_bouldin', np.nan),
-                        'NativeScore': res.get('native_score', np.nan)
-                    })
-                metrics_df = pd.DataFrame(metrics_data)
-
-                if not metrics_df.empty:
-                    st.markdown("##### Performance Metrics vs. Number of Clusters (k)")
-
-                    native_score_name = "Inertia"
-                    if algo_name == 'gmm': native_score_name = "BIC (lower is better)"
-                    elif algo_name == 'pam': native_score_name = "Inertia (PAM)"
-
-                    col_plots1, col_plots2 = st.columns(2)
-                    with col_plots1:
-                        valid_k_for_silhouette = [k for k in k_values_for_algo if algo_results_for_k_values[k].get('silhouette') is not None and not np.isnan(algo_results_for_k_values[k].get('silhouette'))]
-                        if valid_k_for_silhouette:
-                            plot_sil_df = metrics_df[metrics_df['k'].isin(valid_k_for_silhouette)]
-                            fig_sil = px.line(plot_sil_df, x='k', y='Silhouette', title='Silhouette Score vs. k', markers=True)
-                            st.plotly_chart(fig_sil, use_container_width=True)
-                        else:
-                            st.write("Silhouette scores not available or all NaN.")
-
-                        valid_k_for_native = [k for k in k_values_for_algo if algo_results_for_k_values[k].get('native_score') is not None and not np.isnan(algo_results_for_k_values[k].get('native_score'))]
-                        if valid_k_for_native:
-                            plot_native_df = metrics_df[metrics_df['k'].isin(valid_k_for_native)]
-                            fig_native = px.line(plot_native_df, x='k', y='NativeScore', title=f'{native_score_name} vs. k', markers=True)
-                            st.plotly_chart(fig_native, use_container_width=True)
-                        else:
-                            st.write(f"{native_score_name} not available or all NaN.")
-
-                    with col_plots2:
-                        valid_k_for_db = [k for k in k_values_for_algo if algo_results_for_k_values[k].get('davies_bouldin') is not None and not np.isnan(algo_results_for_k_values[k].get('davies_bouldin'))]
-                        if valid_k_for_db:
-                            plot_db_df = metrics_df[metrics_df['k'].isin(valid_k_for_db)]
-                            fig_db = px.line(plot_db_df, x='k', y='Davies-Bouldin', title='Davies-Bouldin Score vs. k', markers=True)
-                            st.plotly_chart(fig_db, use_container_width=True)
-                        else:
-                            st.write("Davies-Bouldin scores not available or all NaN.")
-
-                    st.markdown("---")
-                    st.markdown("##### Detailed View for Selected k")
-
-                    valid_k_options = [k for k in k_values_for_algo if algo_results_for_k_values[k].get('labels') is not None and len(algo_results_for_k_values[k].get('labels')) > 0]
-                    if not valid_k_options:
-                        st.write(f"No valid cluster labels found for {algo_name.upper()} to select k.")
-                        continue
-
-                    selected_k_algo = st.selectbox(
-                        f"Select k for {algo_name.upper()} detailed view",
-                        options=valid_k_options,
-                        key=f"select_k_{algo_name}"
-                    )
-
-                    if selected_k_algo: # Check if a k is selected (it will be if valid_k_options is not empty)
-                        labels = data_manager.get_cluster_labels_for_run(algo_name, selected_k_algo)
-                        if labels is not None and len(labels) > 0:
-                            cluster_counts = pd.Series(labels).value_counts().sort_index()
-                            st.write(f"**Cluster Sizes for k={selected_k_algo}:**")
-                            st.dataframe(cluster_counts.rename("Participant Count"))
-
-                            if data_manager.clustering_manager and hasattr(data_manager.clustering_manager, 'data') and data_manager.clustering_manager.data is not None:
-                                famd_comps_for_plot = data_manager.clustering_manager.data
-                                if famd_comps_for_plot.shape[1] >= 2:
-                                    plot_df_scatter = famd_comps_for_plot.iloc[:, [0, 1]].copy()
-                                    plot_df_scatter.columns = ['Component 1', 'Component 2']
-                                    plot_df_scatter['Cluster'] = labels.astype(str)
-
-                                    fig_scatter = px.scatter(
-                                        plot_df_scatter,
-                                        x='Component 1', y='Component 2',
-                                        color='Cluster',
-                                        title=f'{algo_name.upper()} - Clusters on First Two FAMD Components (k={selected_k_algo})',
-                                        color_discrete_sequence=px.colors.qualitative.Plotly
-                                    )
-                                    st.plotly_chart(fig_scatter, use_container_width=True)
-                                elif famd_comps_for_plot.shape[1] == 1: # Handle 1D case for scatter
-                                    plot_df_scatter = pd.DataFrame({'Component 1': famd_comps_for_plot.iloc[:,0], 'Cluster': labels.astype(str), 'Y': np.zeros(len(labels))})
-                                    fig_scatter = px.scatter(
-                                        plot_df_scatter,
-                                        x='Component 1', y='Y',
-                                        color='Cluster',
-                                        title=f'{algo_name.upper()} - Clusters on First FAMD Component (k={selected_k_algo})',
-                                        color_discrete_sequence=px.colors.qualitative.Plotly
-                                    )
-                                    fig_scatter.update_layout(yaxis_visible=False, yaxis_showticklabels=False)
-                                    st.plotly_chart(fig_scatter, use_container_width=True)
-                                else:
-                                    st.write("Not enough FAMD components (need at least 1) in the clustered data to display scatter plot.")
-                            else:
-                                st.write("Clustered data (FAMD components) not available for scatter plot. This might happen if 'Run All Clustering Algorithms' was not run successfully in this session.")
-                        else:
-                            st.write(f"No labels found for {algo_name.upper()} with k={selected_k_algo}.")
-                else:
-                     st.write(f"No metrics data to display for {algo_name.upper()}. Please ensure the analysis ran correctly for at least one k value.")
+        # Iterate over each algorithm and its results
+        _iterate_over_each_algorithm(algo_map, clustering_results_all_algos)
