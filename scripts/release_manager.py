@@ -61,11 +61,33 @@ def bump_version(latest_version, bump_type):
 def create_github_release(version):
     """
     Creates a new release in GitHub using the API.
-    Requires environment variable GITHUB_TOKEN to be set.
+    Checks for GitHub credentials in .pypirc file first, then falls back to environment variables.
     """
-    token = os.environ.get('GITHUB_TOKEN')
+    # Try to get token from .pypirc file first
+    token = None
+    try:
+        # Get the project root directory
+        script_dir   = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(script_dir)
+        pypirc_path  = os.path.join(project_root, '.pypirc')
+
+        if os.path.exists(pypirc_path):
+            print("Found .pypirc file, checking for GitHub credentials...")
+            with open(pypirc_path, 'r') as f:
+                pypirc_content = f.read()
+
+            # Extract GitHub token from .pypirc
+            github_section = re.search(r'\[github\](.*?)(?=\[|$)', pypirc_content, re.DOTALL)
+            if github_section:
+                token_match = re.search(r'password\s*=\s*(.*)', github_section.group(1))
+                if token_match:
+                    token = token_match.group(1).strip()
+                    print("Found GitHub token in .pypirc file.")
+    except Exception as e:
+        print(f"Error reading .pypirc file: {e}")
+
     if not token or token.strip() == "":
-        print("GITHUB_TOKEN is not set. Skipping GitHub release creation.")
+        print("No GitHub token found in .pypirc file. Skipping GitHub release creation.")
         return
 
     # Get repository info from remote URL
