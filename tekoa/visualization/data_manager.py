@@ -725,79 +725,142 @@ class DataManager:
         Returns:
             bool: True if all analyses were run successfully, False otherwise.
         """
-        if data_source.lower() != 'famd':
-            logger.error(f"Unsupported data_source for clustering: {data_source}. Only 'famd' is currently supported.")
-            st.error(f"Unsupported data_source for clustering: {data_source}.")
+        dimensionality_reduction_successful = False
+        components_df = None
+        logger.info(f"Starting clustering analysis. Initial data_source hint: {data_source}, k_list: {k_list}, optimal_famd_components_count: {optimal_famd_components_count}")
+
+        current_data_for_dim_reduction = self.get_data()
+        if current_data_for_dim_reduction is None or current_data_for_dim_reduction.empty:
+            logger.error("Current processed data is None or empty. Cannot proceed with dimensionality reduction for clustering.")
+            st.error("Dataset is not available. Please load data first.")
             return False
 
-        self.initialize_dimensionality_reducer()
-        if self.dimensionality_reducer is None:
-            logger.error("DimensionalityReducer not initialized in DataManager. Cannot obtain FAMD components.")
-            st.error("DimensionalityReducer not available. Cannot get FAMD components.")
-            return False
-
+        # Determine target n_components (primarily for FAMD, used as a hint for PCA)
         actual_optimal_famd_components_count = optimal_famd_components_count
         if actual_optimal_famd_components_count is None:
-            dr_pipeline_results = st.session_state.pipeline_results.get('dimensionality_reduction', {})
-            optimal_components_info = dr_pipeline_results.get('optimal_components')
-            if optimal_components_info and optimal_components_info.get('method') == 'famd':
-                actual_optimal_famd_components_count = optimal_components_info.get('optimal_number')
-                logger.info(f"Retrieved optimal FAMD components count from pipeline_results: {actual_optimal_famd_components_count}")
-            elif self.dimensionality_reducer.optimal_components is not None and \
-                 hasattr(self.dimensionality_reducer, 'results') and self.dimensionality_reducer.results.get('optimal_components', {}).get('method') == 'famd':
-                actual_optimal_famd_components_count = self.dimensionality_reducer.optimal_components
-                logger.info(f"Retrieved optimal FAMD components count from DimensionalityReducer instance: {actual_optimal_famd_components_count}")
-            elif self.dimensionality_reducer.famd_results and \
-                 'transformed_data' in self.dimensionality_reducer.famd_results and \
-                 self.dimensionality_reducer.famd_results['transformed_data'] is not None:
-                actual_optimal_famd_components_count = self.dimensionality_reducer.famd_results['transformed_data'].shape[1]
-                logger.info(f"Using all available FAMD components from DimensionalityReducer instance: {actual_optimal_famd_components_count}")
-            else:
-                logger.error("Optimal FAMD components count not specified and could not be determined.")
-                st.error("FAMD optimal components not determined. Please run FAMD (and determine optimal components) on the Dimensionality Reduction page first.")
-                return False
+            self.initialize_dimensionality_reducer() # Ensure reducer is available for optimal_components check
+            if self.dimensionality_reducer:
+                dr_pipeline_results = st.session_state.pipeline_results.get('dimensionality_reduction', {})
+                optimal_components_info = dr_pipeline_results.get('optimal_components')
+                if optimal_components_info and optimal_components_info.get('method') == 'famd':
+                    actual_optimal_famd_components_count = optimal_components_info.get('optimal_number')
+                    logger.info(f"Retrieved optimal FAMD components count from pipeline_results: {actual_optimal_famd_components_count}")
+                elif self.dimensionality_reducer.optimal_components is not None and \
+                     hasattr(self.dimensionality_reducer, 'results') and self.dimensionality_reducer.results.get('optimal_components', {}).get('method') == 'famd':
+                    actual_optimal_famd_components_count = self.dimensionality_reducer.optimal_components
+                    logger.info(f"Retrieved optimal FAMD components count from DimensionalityReducer instance: {actual_optimal_famd_components_count}")
+                elif self.dimensionality_reducer.famd_results and \
+                     'transformed_data' in self.dimensionality_reducer.famd_results and \
+                     self.dimensionality_reducer.famd_results['transformed_data'] is not None:
+                    actual_optimal_famd_components_count = self.dimensionality_reducer.famd_results['transformed_data'].shape[1]
+                    logger.info(f"Using all available FAMD components from DimensionalityReducer instance: {actual_optimal_famd_components_count}")
+            if actual_optimal_famd_components_count is None: # If still None
+                logger.warning("Optimal FAMD components count not specified and could not be determined. Will use default for PCA if FAMD fails.")
+                # No st.error here yet, as PCA might still work with a default.
 
-        if not isinstance(actual_optimal_famd_components_count, int) or actual_optimal_famd_components_count <= 0:
-            logger.error(f"Invalid number of FAMD components determined: {actual_optimal_famd_components_count}")
-            st.error(f"Invalid number of FAMD components: {actual_optimal_famd_components_count}. Ensure FAMD is run correctly.")
+        if actual_optimal_famd_components_count is not None and (not isinstance(actual_optimal_famd_components_count, int) or actual_optimal_famd_components_count <= 0):
+            logger.error(f"Invalid target number of components determined: {actual_optimal_famd_components_count}. Clustering cannot proceed with this value.")
+            st.error(f"Invalid target number of components: {actual_optimal_famd_components_count}.")
             return False
 
-        current_data_for_famd = self.get_data()
-        needs_famd_rerun = True
-        if self.dimensionality_reducer and self.dimensionality_reducer.famd_results and \
-           self.dimensionality_reducer.famd_results.get('transformed_data') is not None and \
-           self.dimensionality_reducer.famd_results['transformed_data'].shape[1] == actual_optimal_famd_components_count and \
-           hasattr(self.dimensionality_reducer, 'data') and self.dimensionality_reducer.data is not None and \
-           current_data_for_famd is not None and self.dimensionality_reducer.data.equals(current_data_for_famd):
-            needs_famd_rerun = False
-            logger.info("Suitable FAMD results already exist on DimensionalityReducer instance and its data matches current processed data.")
+        # Attempt FAMD first
+        logger.info("Attempting FAMD for dimensionality reduction.")
+        try:
+            self.initialize_dimensionality_reducer() # Re-initialize with current data if not already
+            if self.dimensionality_reducer is None:
+                logger.error("DimensionalityReducer could not be initialized. Cannot run FAMD.")
+                raise RuntimeError("DimensionalityReducer initialization failed.")
 
-        if needs_famd_rerun:
-            logger.info(f"Ensuring FAMD is run with n_components={actual_optimal_famd_components_count} on current data (shape: {current_data_for_famd.shape if current_data_for_famd is not None else 'None'}).")
-            if current_data_for_famd is None or current_data_for_famd.empty:
-                logger.error("Data for FAMD is not available (current processed data is None or empty).")
-                st.error("Cannot run FAMD as current dataset is unavailable.")
-                return False
+            if actual_optimal_famd_components_count is None:
+                logger.error("Cannot perform FAMD: Optimal number of components for FAMD is not determined.")
+                raise ValueError("Optimal FAMD components count is None, cannot proceed with FAMD.")
 
+            logger.info(f"Performing FAMD with n_components={actual_optimal_famd_components_count} on data of shape {current_data_for_dim_reduction.shape}.")
             famd_execution_results = self.perform_dimensionality_reduction(
                 method='famd',
-                variables=None,
+                variables=None, # FAMD uses all variables
                 n_components=actual_optimal_famd_components_count
             )
             if not famd_execution_results:
-                logger.error("Failed to execute perform_dimensionality_reduction for FAMD.")
-                st.error("Failed to prepare FAMD components for clustering via perform_dimensionality_reduction.")
-                return False
+                raise ValueError("perform_dimensionality_reduction for FAMD returned no results.")
 
-        famd_components_df = self.transform_data(method='famd', n_components=actual_optimal_famd_components_count)
+            famd_components_df = self.transform_data(method='famd', n_components=actual_optimal_famd_components_count)
 
-        if famd_components_df is None or famd_components_df.empty:
-            logger.error("FAMD components are empty or None after transform_data. Cannot proceed with clustering.")
-            st.error("Could not retrieve FAMD components after transform_data. Ensure FAMD was run successfully.")
+            if famd_components_df is not None and not famd_components_df.empty:
+                logger.info(f"FAMD successful. Produced components of shape: {famd_components_df.shape}")
+                components_df = famd_components_df
+                dimensionality_reduction_successful = True
+            else:
+                logger.warning("FAMD transformation returned None or empty DataFrame.")
+                raise ValueError("FAMD transformation resulted in no usable components.")
+
+        except ValueError as e: # Catch specific errors from perform_famd or transform_data
+            logger.warning(f"FAMD failed: {e}. Will attempt PCA as fallback.")
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during FAMD: {e}", exc_info=True)
+            logger.warning("FAMD failed due to an unexpected error. Will attempt PCA as fallback.")
+
+        # Attempt PCA if FAMD failed
+        if not dimensionality_reduction_successful:
+            logger.info("FAMD failed or did not produce components. Attempting PCA as a fallback.")
+            try:
+                self.initialize_dimensionality_reducer() # Ensure it's initialized with current data
+                if self.dimensionality_reducer is None:
+                    logger.error("DimensionalityReducer could not be initialized. Cannot run PCA.")
+                    raise RuntimeError("DimensionalityReducer initialization failed for PCA.")
+
+                numeric_vars = self.dimensionality_reducer.numeric_vars
+                if not numeric_vars:
+                    logger.error("No numeric variables found in the dataset. PCA cannot be performed.")
+                    raise ValueError("No numeric variables available for PCA.")
+
+                # Determine n_components for PCA
+                if actual_optimal_famd_components_count is not None and actual_optimal_famd_components_count > 0:
+                    calculated_pca_n_components = min(actual_optimal_famd_components_count, len(numeric_vars), len(current_data_for_dim_reduction) - 1)
+                else: # Fallback if actual_optimal_famd_components_count was not determined
+                    calculated_pca_n_components = min(10, len(numeric_vars), len(current_data_for_dim_reduction) - 1)
+                
+                if calculated_pca_n_components <= 0:
+                    logger.error(f"Calculated PCA components is {calculated_pca_n_components}, which is invalid. Min(10, num_numeric_vars, num_samples-1) resulted in this.")
+                    raise ValueError("Invalid number of components calculated for PCA.")
+
+                logger.info(f"Performing PCA with n_components={calculated_pca_n_components} on data of shape {current_data_for_dim_reduction.shape} using {len(numeric_vars)} numeric variables.")
+                pca_execution_results = self.perform_dimensionality_reduction(
+                    method='pca',
+                    variables=None, # PCA will use all numeric variables by default
+                    n_components=calculated_pca_n_components,
+                    standardize=True
+                )
+                if not pca_execution_results:
+                    raise ValueError("perform_dimensionality_reduction for PCA returned no results.")
+
+                pca_components_df = self.transform_data(method='pca', n_components=calculated_pca_n_components)
+
+                if pca_components_df is not None and not pca_components_df.empty:
+                    logger.info(f"PCA successful. Produced components of shape: {pca_components_df.shape}")
+                    components_df = pca_components_df
+                    dimensionality_reduction_successful = True
+                else:
+                    logger.warning("PCA transformation returned None or empty DataFrame.")
+                    raise ValueError("PCA transformation resulted in no usable components.")
+
+            except ValueError as e: # Catch specific errors from PCA steps
+                logger.error(f"PCA also failed: {e}.")
+            except Exception as e:
+                logger.error(f"An unexpected error occurred during PCA: {e}", exc_info=True)
+                logger.error("PCA also failed due to an unexpected error.")
+
+        # Check for success of dimensionality reduction
+        if not dimensionality_reduction_successful or components_df is None or components_df.empty:
+            logger.error("Both FAMD and PCA failed to produce usable components. Clustering will be skipped.")
+            st.error("Clustering cannot proceed as dimensionality reduction (FAMD and PCA) failed to produce usable components.")
             return False
 
-        if not self.initialize_clustering_manager(famd_components_df):
-            st.error("Failed to initialize Clustering Manager with FAMD components.")
+        logger.info(f"Dimensionality reduction successful. Using components of shape {components_df.shape} for clustering.")
+
+        if not self.initialize_clustering_manager(components_df):
+            st.error("Failed to initialize Clustering Manager with the obtained components.")
+            logger.error("Failed to initialize ClusteringManager even after successful dimensionality reduction.")
             return False
 
         algorithms_to_run = ['kmeans', 'pam', 'gmm']

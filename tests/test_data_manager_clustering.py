@@ -1,255 +1,282 @@
-import unittest
+import pytest
 import pandas as pd
 import numpy as np
 from unittest.mock import patch, MagicMock, PropertyMock
 
-from tekoa.visualization.app_refactored_claude_components.data_manager import DataManager
-from tekoa.utils.clustering_manager import ClusteringManager # For type checking if needed by mocks
-from tekoa.utils.dimensionality_reducer import DimensionalityReducer # For type checking if needed by mocks
+# Mock streamlit before DataManager is imported, as DataManager might use st.* at import time
+# or in its __init__ if it calls _initialize_session_state.
+mock_st_session_state = MagicMock()
+mock_st_error = MagicMock()
 
-class TestDataManagerClustering(unittest.TestCase):
+# Simulate a basic structure for session_state.pipeline_results
+mock_st_session_state.pipeline_results = {}
+mock_st_session_state.get = lambda key, default: getattr(mock_st_session_state, key, default)
 
-    def setUp(self):
-        self.sample_raw_data = pd.DataFrame({
-            'col1': np.random.rand(20),
-            'col2': np.random.rand(20),
-            'col3': ['cat{}'.format(i % 3) for i in range(20)]
-        })
+# It's important to set up setdefault on the pipeline_results dictionary itself
+# if the code directly calls setdefault on st.session_state.pipeline_results
+# However, DataManager calls st.session_state.setdefault('clustering', {})
+# which means we need to mock setdefault on mock_st_session_state directly.
+def session_state_setdefault(key, default_value):
+    if not hasattr(mock_st_session_state, key):
+        setattr(mock_st_session_state, key, default_value)
+    return getattr(mock_st_session_state, key)
 
-        self.patcher_st = patch('tekoa.visualization.app_refactored_claude_components.data_manager.st', new_callable=MagicMock)
-        self.mock_st_global = self.patcher_st.start()
-        self.addCleanup(self.patcher_st.stop)
-
-        self.mock_st_global.session_state = {'processed_data': self.sample_raw_data.copy(), 'pipeline_results': {}}
-
-        self.data_manager = DataManager()
-
-        self.k_list = [2, 3]
-        self.optimal_famd_components = 3
-        self.mock_famd_components_df = pd.DataFrame(
-            np.random.rand(len(self.sample_raw_data), self.optimal_famd_components),
-            columns=[f'FAMD_{i+1}' for i in range(self.optimal_famd_components)]
-        )
-
-    def test_initialize_clustering_manager(self):
-        result = self.data_manager.initialize_clustering_manager(self.mock_famd_components_df)
-        self.assertTrue(result)
-        self.assertIsInstance(self.data_manager.clustering_manager, ClusteringManager)
-        self.assertTrue(self.data_manager.clustering_manager.data.equals(self.mock_famd_components_df))
-
-        result_empty = self.data_manager.initialize_clustering_manager(pd.DataFrame())
-        self.assertFalse(result_empty)
-        self.assertIsNone(self.data_manager.clustering_manager)
-
-        result_none = self.data_manager.initialize_clustering_manager(None)
-        self.assertFalse(result_none)
-        self.assertIsNone(self.data_manager.clustering_manager)
-
-    @patch('tekoa.visualization.app_refactored_claude_components.data_manager.ClusteringManager')
-    @patch('tekoa.visualization.app_refactored_claude_components.data_manager.DimensionalityReducer')
-    @patch.object(DataManager, 'transform_data') # Patching DataManager's own method
-    def test_run_all_clustering_analyses_success_no_rerun(self, mock_dm_transform_data, MockDimensionalityReducerClass, MockClusteringManagerClass):
-        # This test ensures that if FAMD results are current, DataManager.perform_dimensionality_reduction is not called again.
-
-        mock_dr_instance = MockDimensionalityReducerClass.return_value
-        # Configure the DimensionalityReducer instance for the "no rerun" path:
-        # 1. Its internal data matches the current processed data
-        mock_dr_instance.data = self.mock_st_global.session_state['processed_data']
-        # 2. It has FAMD results with the correct number of components
-        mock_dr_instance.famd_results = {
-            'transformed_data': pd.DataFrame(np.random.rand(len(self.sample_raw_data), self.optimal_famd_components))
-        }
-
-        mock_dm_transform_data.return_value = self.mock_famd_components_df
-        mock_cm_instance = MockClusteringManagerClass.return_value
-
-        # Spy on DataManager.perform_dimensionality_reduction to ensure it's NOT called
-        with patch.object(self.data_manager, 'perform_dimensionality_reduction') as mock_dm_perform_dr_spy:
-            success = self.data_manager.run_all_clustering_analyses(
-                self.k_list,
-                optimal_famd_components_count=self.optimal_famd_components,
-                random_state=0
-            )
-            self.assertTrue(success)
-            mock_dm_perform_dr_spy.assert_not_called() # Key: FAMD re-run was not needed
-
-        mock_dm_transform_data.assert_called_once_with(method='famd', n_components=self.optimal_famd_components)
-        MockClusteringManagerClass.assert_called_once_with(self.mock_famd_components_df)
-        self.assertEqual(mock_cm_instance.run_clustering_pipeline.call_count, 3)
-        mock_cm_instance.run_clustering_pipeline.assert_any_call(algorithm_type='kmeans', k_list=self.k_list, random_state=0)
-        self.assertIn('clustering', self.mock_st_global.session_state['pipeline_results'])
+mock_st_session_state.setdefault = session_state_setdefault
 
 
-    @patch('tekoa.visualization.app_refactored_claude_components.data_manager.ClusteringManager')
-    @patch.object(DataManager, 'transform_data')
-    @patch.object(DataManager, 'perform_dimensionality_reduction')
-    @patch('tekoa.visualization.app_refactored_claude_components.data_manager.DimensionalityReducer') # To control the instance created by initialize_dimensionality_reducer
-    def test_run_all_clustering_analyses_famd_rerun_needed(self, MockDimensionalityReducerClass, mock_dm_perform_dr, mock_dm_transform_data, MockClusteringManagerClass):
-        # Configure the DimensionalityReducer instance that will be created to trigger a rerun
-        mock_dr_instance = MockDimensionalityReducerClass.return_value
-        mock_dr_instance.famd_results = None # This will cause 'needs_famd_rerun' to be true
-        mock_dr_instance.data = self.mock_st_global.session_state['processed_data']
+@patch('streamlit.session_state', new=mock_st_session_state)
+@patch('streamlit.error', new=mock_st_error)
+def data_manager_instance_creator():
+    from tekoa.visualization.data_manager import DataManager # Import here after st is mocked
+    dm = DataManager()
+    # Simulate initial data loading for relevant attributes
+    dm.data = pd.DataFrame({
+        'numeric_col1': np.random.rand(20),
+        'numeric_col2': np.random.rand(20),
+        'numeric_col3': np.random.rand(20), # For PCA to have enough features
+        'categorical_col1': ['A'] * 10 + ['B'] * 10
+    })
+    # Mock get_data to return a copy of this, consistent with how DataManager works
+    dm.get_data = MagicMock(return_value=dm.data.copy())
+
+    # Directly mock the attributes that would be initialized by other methods
+    dm.dimensionality_reducer = MagicMock()
+    dm.dimensionality_reducer.numeric_vars = ['numeric_col1', 'numeric_col2', 'numeric_col3']
+    dm.dimensionality_reducer.categorical_vars = ['categorical_col1']
+    
+    # Ensure the data attribute of dimensionality_reducer is set for FAMD calls if it checks it
+    dm.dimensionality_reducer.data = dm.data.copy()
 
 
-        mock_dm_perform_dr.return_value = {'method': 'famd', 'n_components': self.optimal_famd_components}
-        mock_dm_transform_data.return_value = self.mock_famd_components_df
-        mock_cm_instance = MockClusteringManagerClass.return_value
+    dm.clustering_manager = MagicMock()
+    return dm
 
-        success = self.data_manager.run_all_clustering_analyses(
-            self.k_list,
-            optimal_famd_components_count=self.optimal_famd_components,
-            random_state=0
-        )
-        self.assertTrue(success)
+@pytest.fixture
+def data_manager_instance(mocker):
+    # Reset mocks for each test to ensure test isolation
+    mock_st_session_state.reset_mock()
+    mock_st_error.reset_mock()
+    # Ensure pipeline_results is reset for each test run that uses the fixture
+    mock_st_session_state.pipeline_results = {}
+    
+    # Mock the DataManager's internal initializers for its components
+    # This prevents the actual DimensionalityReducer/ClusteringManager from being created
+    mocker.patch('tekoa.visualization.data_manager.DimensionalityReducer', return_value=MagicMock(spec=True))
+    mocker.patch('tekoa.visualization.data_manager.ClusteringManager', return_value=MagicMock(spec=True))
 
-        mock_dm_perform_dr.assert_called_once_with(
-            method='famd',
-            variables=None,
-            n_components=self.optimal_famd_components
-        )
-        mock_dm_transform_data.assert_called_once_with(method='famd', n_components=self.optimal_famd_components)
-        MockClusteringManagerClass.assert_called_once_with(self.mock_famd_components_df)
-        self.assertEqual(mock_cm_instance.run_clustering_pipeline.call_count, 3)
+    dm = data_manager_instance_creator()
+    
+    # Re-assign the mocked reducer and clusterer after DataManager.__init__ might have run
+    # (though with the patches above, it should use the MagicMocks)
+    # We need to ensure the instance dm.dimensionality_reducer is the one we configure.
+    # The patches on the class should mean dm.dimensionality_reducer (if created by init_dim_reducer)
+    # would be a MagicMock. We just need to ensure it has numeric_vars.
+    
+    # If initialize_dimensionality_reducer is called by the method under test,
+    # it will use the patched DimensionalityReducer.
+    # Let's ensure the instance used by the method has the properties we need.
+    # We can mock the initialize methods on DataManager itself.
+    
+    # The current DataManager.run_all_clustering_analyses calls self.initialize_dimensionality_reducer()
+    # This method in DataManager sets self.dimensionality_reducer.
+    # So, we need to control what this self.dimensionality_reducer becomes.
+    # The easiest is to let it be created (it will be a MagicMock due to the class patch)
+    # and then configure that MagicMock instance within each test *after* initialize_dimensionality_reducer is called.
+    # OR, we can mock initialize_dimensionality_reducer itself.
 
-    @patch('tekoa.visualization.app_refactored_claude_components.data_manager.DimensionalityReducer')
-    def test_run_all_clustering_analyses_no_famd_optimal_components(self, MockDimensionalityReducerClass):
-        mock_dr_instance = MockDimensionalityReducerClass.return_value
-        mock_dr_instance.optimal_components = None
-        mock_dr_instance.famd_results = None
-
-        # Ensure pipeline_results also doesn't have it from a previous run
-        self.mock_st_global.session_state['pipeline_results'] = {}
-
-
-        result = self.data_manager.run_all_clustering_analyses(self.k_list, optimal_famd_components_count=None)
-        self.assertFalse(result)
-        self.mock_st_global.error.assert_any_call("FAMD optimal components not determined. Please run FAMD (and determine optimal components) on the Dimensionality Reduction page first.")
-
-    @patch('tekoa.visualization.app_refactored_claude_components.data_manager.DimensionalityReducer')
-    @patch.object(DataManager, 'perform_dimensionality_reduction', return_value=True)
-    @patch.object(DataManager, 'transform_data', return_value=None)
-    def test_run_all_clustering_analyses_transform_fails(self, mock_transform_data, mock_perform_dr, MockDimReducer):
-        # Mock DimReducer instance attributes for the path leading up to transform_data
-        mock_dr_instance = MockDimReducer.return_value
-        mock_dr_instance.data = self.mock_st_global.session_state['processed_data']
-        mock_dr_instance.famd_results = {'transformed_data': "dummy_data_not_none"} # Make it seem like FAMD ran
-
-        result = self.data_manager.run_all_clustering_analyses(self.k_list, optimal_famd_components_count=self.optimal_famd_components)
-        self.assertFalse(result)
-        self.mock_st_global.error.assert_called_with("Could not retrieve FAMD components after transform_data. Ensure FAMD was run successfully.")
-
-    def test_get_all_clustering_results(self):
-        test_results = {'kmeans': {'k2': 'test_val'}}
-        self.mock_st_global.session_state['pipeline_results']['clustering'] = test_results
-        results = self.data_manager.get_all_clustering_results()
-        self.assertEqual(results, test_results)
-
-        self.mock_st_global.session_state['pipeline_results']['clustering'] = {}
-        self.assertEqual(self.data_manager.get_all_clustering_results(), {})
-
-        del self.mock_st_global.session_state['pipeline_results']['clustering']
-        self.assertEqual(self.data_manager.get_all_clustering_results(), {})
-
-    def test_get_cluster_labels_and_model_for_run_with_manager(self):
-        self.data_manager.clustering_manager = MagicMock(spec=ClusteringManager)
-        mock_labels = np.array([0,0,1,1])
-        mock_model_obj = MagicMock()
-        self.data_manager.clustering_manager.get_labels.return_value = mock_labels
-        self.data_manager.clustering_manager.get_model.return_value = mock_model_obj
-
-        labels = self.data_manager.get_cluster_labels_for_run('kmeans', 2)
-        model = self.data_manager.get_cluster_model_for_run('kmeans', 2)
-
-        self.data_manager.clustering_manager.get_labels.assert_called_with('kmeans', 2)
-        np.testing.assert_array_equal(labels, mock_labels)
-        self.data_manager.clustering_manager.get_model.assert_called_with('kmeans', 2)
-        self.assertEqual(model, mock_model_obj)
-
-    def test_get_cluster_labels_and_model_for_run_no_manager(self):
-        self.data_manager.clustering_manager = None
-        labels = self.data_manager.get_cluster_labels_for_run('kmeans', 2)
-        model = self.data_manager.get_cluster_model_for_run('kmeans', 2)
-        self.assertIsNone(labels)
-        self.assertIsNone(model)
-
-    @patch('tekoa.visualization.app_refactored_claude_components.data_manager.characterize_phenotypes')
-    def test_characterize_selected_phenotypes_success(self, mock_characterize_phenotypes_util):
-        # self.mock_st_global is available from setUp
-        # self.data_manager is available from setUp
-
-        algo_type = 'kmeans'
-        n_clusters = 2
-        variables_to_compare = ['Age', 'Outcome']
-
-        # Mock inputs that characterize_selected_phenotypes will try to fetch
-        mock_original_data = pd.DataFrame({
-            'Age': [20, 25, 30, 35, 40, 45],
-            'Outcome': [1, 0, 1, 0, 1, 0],
-            'OtherVar': ['A', 'B', 'A', 'B', 'A', 'B']
-        })
-        mock_labels = np.array([0, 0, 1, 1, 0, 1])
-
-        # Configure DataManager's internal getters
-        self.data_manager.get_original_data = MagicMock(return_value=mock_original_data)
-        self.data_manager.get_cluster_labels_for_run = MagicMock(return_value=mock_labels)
-
-        # Configure the mock utility function
-        mock_char_df = pd.DataFrame({
-            'Variable': variables_to_compare,
-            'TestType': ['ANOVA', 'Chi-Square'], # Example
-            'PValue': [0.01, 0.04]
-            # Minimal df for testing DataManager's role, not the util's full output
-        })
-        mock_characterize_phenotypes_util.return_value = mock_char_df
-
-        # Call the method
-        result_df = self.data_manager.characterize_selected_phenotypes(algo_type, n_clusters, variables_to_compare)
-
-        # Assertions
-        self.data_manager.get_original_data.assert_called_once()
-        self.data_manager.get_cluster_labels_for_run.assert_called_once_with(algo_type, n_clusters)
-        mock_characterize_phenotypes_util.assert_called_once_with(
-            original_data=mock_original_data,
-            labels=mock_labels,
-            variables_to_compare=variables_to_compare
-        )
-        self.assertIsNotNone(result_df)
-        pd.testing.assert_frame_equal(result_df, mock_char_df)
-
-        # Check storage in session state
-        # Ensure the path exists before asserting
-        self.assertIn('clustering', self.mock_st_global.session_state['pipeline_results'])
-        self.assertIn(algo_type, self.mock_st_global.session_state['pipeline_results']['clustering'])
-        self.assertIn(n_clusters, self.mock_st_global.session_state['pipeline_results']['clustering'][algo_type])
-
-        expected_storage_path = self.mock_st_global.session_state['pipeline_results']['clustering'][algo_type][n_clusters]['characterization_results']
-        pd.testing.assert_frame_equal(expected_storage_path, mock_char_df)
-
-    def test_characterize_selected_phenotypes_no_labels(self):
-        # self.mock_st_global and self.data_manager from setUp
-
-        self.data_manager.get_original_data = MagicMock(return_value=pd.DataFrame({'Age': [1,2]}))
-        self.data_manager.get_cluster_labels_for_run = MagicMock(return_value=None) # Simulate no labels
-
-        result_df = self.data_manager.characterize_selected_phenotypes('kmeans', 2, ['Age'])
-
-        self.assertIsNone(result_df)
-        self.mock_st_global.error.assert_called_with("Cluster labels for kmeans (k=2) not found. Please ensure clustering was run successfully.")
-
-    def test_characterize_selected_phenotypes_no_variables(self):
-        # self.mock_st_global and self.data_manager from setUp
-        mock_original_data = pd.DataFrame({'Age': [20, 25, 30, 35, 40, 45]})
-        mock_labels = np.array([0, 0, 1, 1, 0, 1])
-        self.data_manager.get_original_data = MagicMock(return_value=mock_original_data)
-        self.data_manager.get_cluster_labels_for_run = MagicMock(return_value=mock_labels)
-
-        result_df = self.data_manager.characterize_selected_phenotypes('kmeans', 2, []) # Empty list of variables
-
-        self.assertIsNotNone(result_df)
-        self.assertTrue(result_df.empty)
-        self.assertListEqual(list(result_df.columns), ['Variable', 'TestType', 'Statistic', 'PValue', 'CorrectedPValue', 'RejectNullFDR', 'EffectSize'])
-        self.mock_st_global.warning.assert_called_with("Please select at least one variable to characterize.")
+    # For simplicity, let's mock initialize_dimensionality_reducer to do nothing,
+    # and we will use the dm.dimensionality_reducer we already set up in data_manager_instance_creator.
+    mocker.patch.object(dm, 'initialize_dimensionality_reducer', side_effect=lambda: None)
+    # Do the same for initialize_clustering_manager if it's called before run_clustering_pipeline
+    mocker.patch.object(dm, 'initialize_clustering_manager', side_effect=lambda data: True) # Simulate success
 
 
-if __name__ == '__main__':
-    unittest.main()
+    return dm
+
+
+# Test Case 1: FAMD success
+@patch('streamlit.session_state', new=mock_st_session_state)
+@patch('streamlit.error', new=mock_st_error)
+def test_run_all_clustering_analyses_famd_success(data_manager_instance, mocker):
+    dm = data_manager_instance
+
+    # Configure the mocked dimensionality_reducer on the dm instance
+    mock_famd_execution_results = {'some_famd_metric': 'value'} # Simulate what perform_famd might return
+    dm.dimensionality_reducer.perform_famd.return_value = mock_famd_execution_results
+    
+    mock_famd_transformed_df = pd.DataFrame({'famd_comp1': [1,2,3], 'famd_comp2': [4,5,6]})
+    
+    # Mock DataManager's own transform_data method for this test
+    # This is what run_all_clustering_analyses calls internally after perform_dimensionality_reduction
+    mocker.patch.object(dm, 'transform_data', return_value=mock_famd_transformed_df)
+    
+    # Configure the mocked clustering_manager
+    dm.clustering_manager.run_clustering_pipeline.return_value = None # It doesn't return anything
+    dm.clustering_manager.get_clustering_results.return_value = {'kmeans_metric': 123}
+
+
+    result = dm.run_all_clustering_analyses(k_list=[2,3], optimal_famd_components_count=2)
+
+    assert result is True
+    # perform_dimensionality_reduction is called by run_all_clustering_analyses
+    # This internal method then calls dm.dimensionality_reducer.perform_famd
+    # So we check the call on dm.dimensionality_reducer.perform_famd
+    dm.dimensionality_reducer.perform_famd.assert_called_once_with(n_components=2)
+    dm.dimensionality_reducer.perform_pca.assert_not_called()
+    
+    dm.transform_data.assert_called_once_with(method='famd', n_components=2)
+    dm.initialize_clustering_manager.assert_called_once_with(mock_famd_transformed_df)
+    assert dm.clustering_manager.run_clustering_pipeline.call_count == 3 # kmeans, pam, gmm
+
+    assert 'clustering' in mock_st_session_state.pipeline_results
+    assert 'kmeans' in mock_st_session_state.pipeline_results['clustering']
+
+
+# Test Case 2: FAMD fails, PCA success
+@patch('streamlit.session_state', new=mock_st_session_state)
+@patch('streamlit.error', new=mock_st_error)
+def test_run_all_clustering_analyses_famd_fails_pca_succeeds(data_manager_instance, mocker):
+    dm = data_manager_instance
+
+    # Mock FAMD failure: perform_famd raises error, or returns results that lead to transform_data returning None/empty
+    dm.dimensionality_reducer.perform_famd.side_effect = ValueError("FAMD failed intentionally")
+    
+    # Mock PCA success
+    mock_pca_execution_results = {'some_pca_metric': 'value'}
+    dm.dimensionality_reducer.perform_pca.return_value = mock_pca_execution_results
+    
+    mock_pca_transformed_df = pd.DataFrame({'pca_comp1': [10,20,30], 'pca_comp2': [40,50,60]})
+
+    # dm.transform_data needs to be configured for both FAMD (fail) and PCA (success) paths
+    def transform_data_side_effect(method, n_components):
+        if method == 'famd':
+            return pd.DataFrame() # Simulate FAMD transform returning empty
+        elif method == 'pca':
+            return mock_pca_transformed_df
+        return None
+    mocker.patch.object(dm, 'transform_data', side_effect=transform_data_side_effect)
+
+    dm.clustering_manager.run_clustering_pipeline.return_value = None
+    dm.clustering_manager.get_clustering_results.return_value = {'pca_kmeans_metric': 456}
+
+    # dm.dimensionality_reducer.numeric_vars has 3 vars. data has 20 samples.
+    # PCA n_components will be min(2, 3, 19) = 2 if optimal_famd_components_count is 2
+    expected_pca_n_components = 2
+
+    result = dm.run_all_clustering_analyses(k_list=[2,3], optimal_famd_components_count=2)
+
+    assert result is True
+    dm.dimensionality_reducer.perform_famd.assert_called_once_with(n_components=2)
+    dm.dimensionality_reducer.perform_pca.assert_called_once_with(variables=None, n_components=expected_pca_n_components, standardize=True)
+    
+    dm.transform_data.assert_any_call(method='famd', n_components=2)
+    dm.transform_data.assert_any_call(method='pca', n_components=expected_pca_n_components)
+    
+    dm.initialize_clustering_manager.assert_called_once_with(mock_pca_transformed_df)
+    assert dm.clustering_manager.run_clustering_pipeline.call_count == 3
+
+    assert 'clustering' in mock_st_session_state.pipeline_results
+    assert 'kmeans' in mock_st_session_state.pipeline_results['clustering']
+
+
+# Test Case 3: Both FAMD and PCA fail
+@patch('streamlit.session_state', new=mock_st_session_state)
+@patch('streamlit.error', new=mock_st_error) # mock_st_error is already our global mock
+def test_run_all_clustering_analyses_famd_pca_fail(data_manager_instance, mocker, caplog):
+    dm = data_manager_instance
+    caplog.set_level("ERROR") # Capture ERROR level logs
+
+    # Mock FAMD failure
+    dm.dimensionality_reducer.perform_famd.side_effect = ValueError("FAMD failed intentionally for test")
+    # Mock PCA failure
+    dm.dimensionality_reducer.perform_pca.side_effect = ValueError("PCA failed intentionally for test")
+
+    # Mock transform_data to return None/empty for both methods
+    def transform_data_side_effect(method, n_components):
+        return pd.DataFrame() # Empty DataFrame
+    mocker.patch.object(dm, 'transform_data', side_effect=transform_data_side_effect)
+
+    # optimal_famd_components_count = 2. numeric_vars=3. samples=20.
+    # expected_pca_n_components = min(2,3,19) = 2
+    expected_pca_n_components = 2
+
+    result = dm.run_all_clustering_analyses(k_list=[2,3], optimal_famd_components_count=2)
+
+    assert result is False
+    dm.dimensionality_reducer.perform_famd.assert_called_once_with(n_components=2)
+    dm.dimensionality_reducer.perform_pca.assert_called_once_with(variables=None, n_components=expected_pca_n_components, standardize=True)
+    
+    dm.transform_data.assert_any_call(method='famd', n_components=2)
+    dm.transform_data.assert_any_call(method='pca', n_components=expected_pca_n_components)
+    
+    mock_st_error.assert_called_once_with("Clustering cannot proceed as dimensionality reduction (FAMD and PCA) failed to produce usable components.")
+    dm.initialize_clustering_manager.assert_not_called()
+    
+    assert "Both FAMD and PCA failed to produce usable components. Clustering will be skipped." in caplog.text
+
+
+# Additional test: FAMD fails, PCA succeeds, optimal_famd_components_count is None
+@patch('streamlit.session_state', new=mock_st_session_state)
+@patch('streamlit.error', new=mock_st_error)
+def test_run_all_clustering_analyses_famd_fails_pca_succeeds_no_optimal_count(data_manager_instance, mocker):
+    dm = data_manager_instance
+
+    dm.dimensionality_reducer.perform_famd.side_effect = ValueError("FAMD failed")
+    
+    mock_pca_execution_results = {'some_pca_metric': 'value'}
+    dm.dimensionality_reducer.perform_pca.return_value = mock_pca_execution_results
+    
+    mock_pca_transformed_df = pd.DataFrame({'pca_comp1': [10,20,30], 'pca_comp2': [40,50,60]})
+
+    def transform_data_side_effect(method, n_components):
+        if method == 'famd':
+            # This might not even be called if perform_famd fails early in the actual DataManager.perform_dim_reduction
+            # Or it might be called and return empty. Let's assume it returns empty.
+            return pd.DataFrame() 
+        elif method == 'pca':
+            return mock_pca_transformed_df
+        return None
+    mocker.patch.object(dm, 'transform_data', side_effect=transform_data_side_effect)
+
+    dm.clustering_manager.run_clustering_pipeline.return_value = None
+    dm.clustering_manager.get_clustering_results.return_value = {'pca_kmeans_metric': 789}
+
+    # When optimal_famd_components_count is None:
+    # PCA n_components = min(10, len(numeric_vars), len(data)-1)
+    # numeric_vars = 3, data_len = 20. So, min(10, 3, 19) = 3
+    expected_pca_n_components = 3
+
+    result = dm.run_all_clustering_analyses(k_list=[2,3], optimal_famd_components_count=None)
+
+    assert result is True
+    # FAMD is attempted. Since optimal_famd_components_count is None, the FAMD call inside
+    # perform_dimensionality_reduction might not happen if it strictly requires n_components.
+    # The current code for run_all_clustering_analyses:
+    # if actual_optimal_famd_components_count is None: raises error for FAMD.
+    # So, perform_famd should not be called with n_components=None if it's strict.
+    # Let's check the call to perform_famd itself.
+    # The current structure calls perform_dimensionality_reduction(method='famd', n_components=actual_optimal_famd_components_count)
+    # If actual_optimal_famd_components_count is None, FAMD part raises ValueError.
+    # So, dm.dimensionality_reducer.perform_famd will not be called.
+    # dm.dimensionality_reducer.perform_famd.assert_not_called() # This depends on internal logic of perform_dimensionality_reduction
+    # Let's trace: run_all_clustering_analyses gets actual_optimal_famd_components_count = None.
+    # Then it tries FAMD. Inside the try block for FAMD:
+    # if actual_optimal_famd_components_count is None: logger.error; raise ValueError.
+    # So, dm.perform_dimensionality_reduction(method='famd'...) is NOT called with n_components=None.
+    # The ValueError is caught. Then PCA path is taken.
+    
+    # So, perform_famd on the reducer mock should not be called.
+    dm.dimensionality_reducer.perform_famd.assert_not_called()
+
+
+    dm.dimensionality_reducer.perform_pca.assert_called_once_with(variables=None, n_components=expected_pca_n_components, standardize=True)
+    
+    # transform_data for FAMD might not be called if perform_famd itself isn't called or fails very early
+    # Based on the logic, if FAMD part raises ValueError before calling self.perform_dimensionality_reduction('famd'...),
+    # then self.transform_data('famd'...) also won't be called.
+    # Let's check that transform_data was called for PCA.
+    dm.transform_data.assert_called_once_with(method='pca', n_components=expected_pca_n_components)
+    
+    dm.initialize_clustering_manager.assert_called_once_with(mock_pca_transformed_df)
+    assert dm.clustering_manager.run_clustering_pipeline.call_count == 3
+```

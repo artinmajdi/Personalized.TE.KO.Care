@@ -148,6 +148,7 @@ class DimensionalityReducer:
         """
         # Prepare the data - FAMD requires all categorical columns to be of type 'category'
         data_for_famd = self.data.copy()
+        logger.info(f"Original data shape for FAMD: {data_for_famd.shape}")
 
         # Convert categorical columns to category type
         for col in self.categorical_vars:
@@ -157,13 +158,14 @@ class DimensionalityReducer:
 
         # Handle missing values - drop rows with any missing values for now
         data_clean = data_for_famd.dropna()
+        logger.info(f"Data shape after dropna() for FAMD: {data_clean.shape}")
 
         if len(data_clean) < len(data_for_famd):
             logger.warning(f"Dropped {len(data_for_famd) - len(data_clean)} rows with missing values for FAMD.")
 
-        if len(data_clean) == 0:
-            logger.error("No complete cases available for FAMD.")
-            return {}
+        if data_clean.empty:
+            logger.error("No data remaining after removing rows with missing values. FAMD cannot proceed.")
+            raise ValueError("No data remaining for FAMD after removing rows with missing values.")
 
         try:
             # Perform FAMD
