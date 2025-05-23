@@ -39,7 +39,7 @@ class Dashboard:
 
     def __init__(self):
         """Initialize the TE-KOA dashboard component."""
-        logging.info("Initializing Dashboard...")
+        logger.info("Initializing Dashboard...")
         self.data_manager = DataManager()
 
     def run(self):
