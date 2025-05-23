@@ -30,8 +30,7 @@ from tekoa.visualization.pages import (
     DimensionalityPage,
     QualityPage,
     TreatmentGroupsPage,
-    PipelinePage,
-    ClusteringPage
+    PipelinePage
 )
 
 class Dashboard:
@@ -123,9 +122,6 @@ class Dashboard:
 
         elif current_page == 'Pipeline & Export':
             PipelinePage.render(self.data_manager)
-
-        elif current_page == 'Clustering (Phase II)': # Matches st.session_state.current_page
-            ClusteringPage.render(self.data_manager)
 
         else:
             st.warning(f"Unknown page: {current_page}")

@@ -61,7 +61,7 @@ class DataManager:
 
         Args:
             uploaded_file_obj: The uploaded file object (e.g., from Streamlit's file_uploader).
-                               If None, loading will fail.
+                                If None, loading will fail.
 
         Returns:
             bool: True if data loaded successfully, False otherwise.
@@ -201,8 +201,7 @@ class DataManager:
 
         return imputed_data
 
-    def screen_variables(self, near_zero_threshold: float, collinearity_threshold: float,
-                         vif_threshold: float, force_include: List[str]) -> Dict[str, Any]:
+    def screen_variables(self, near_zero_threshold: float, collinearity_threshold: float, vif_threshold: float, force_include: List[str]) -> Dict[str, Any]:
         """
         Screen variables for near-zero variance, collinearity, and VIF.
 
@@ -275,7 +274,6 @@ class DataManager:
             )
         elif method == 'famd':
             results = self.dimensionality_reducer.perform_famd( n_components=n_components )
-
         else:
             raise ValueError(f"Unknown dimensionality reduction method: {method}")
 
@@ -289,7 +287,6 @@ class DataManager:
             explained_variance = explained_variance.tolist()
 
         cumulative_explained_variance = results.get('cumulative_explained_variance', [])
-
         if isinstance(cumulative_explained_variance, np.ndarray):
             cumulative_explained_variance = cumulative_explained_variance.tolist()
 
@@ -687,4 +684,3 @@ class DataManager:
 
         filename = "te_koa_pipeline_report.md"
         return report, filename, "markdown"
-
