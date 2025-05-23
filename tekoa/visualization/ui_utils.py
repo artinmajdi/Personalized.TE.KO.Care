@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 import base64
 
+from tekoa import logger
+
 # Define app configuration
 APP_TITLE = "TE-KOA Clinical Research Dashboard"
 APP_SUBTITLE = "Phenotyping and Heterogeneity of Treatment Effects in Knee Osteoarthritis"

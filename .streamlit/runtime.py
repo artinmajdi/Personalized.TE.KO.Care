@@ -13,25 +13,25 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger('te_koa')
+logger = logging.getLogger('tekoa')
 
 try:
     # Add the project root to the Python path
     root_path = pathlib.Path(__file__).parent.parent.absolute()
     sys.path.insert(0, str(root_path))
     logger.info(f"Added {root_path} to Python path")
-    
+
     # Setup module reloading for better development experience
     import importlib
     def reload_modules():
         """Force reload of project modules to ensure latest changes are used."""
         for module_name in list(sys.modules.keys()):
-            if module_name.startswith('te_koa'):
+            if module_name.startswith('tekoa'):
                 try:
                     importlib.reload(sys.modules[module_name])
                 except:
                     pass
-    
+
     # Call this function to reload modules on startup
     reload_modules()
 

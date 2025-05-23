@@ -46,7 +46,7 @@ class EnumWithHelpers(enum.Enum):
 
 class DatasetNames(EnumWithHelpers):
 	"""Dataset names used in the project."""
-	TE_KOA = "te_koa"
+	TEKOA = "tekoa"
 
 # Type aliases for improved code readability
 VariableID : TypeAlias = str  # Format: 'var_0', 'var_1', etc.
