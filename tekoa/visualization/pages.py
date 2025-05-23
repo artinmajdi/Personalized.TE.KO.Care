@@ -9,10 +9,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.express as px
-import logging
 from wordcloud import WordCloud
 from scipy import stats as scipy_stats
 
+from tekoa import logger
 from tekoa.visualization.data_manager import DataManager
 from tekoa.visualization.ui_utils import (
     COLOR_PALETTE,
@@ -21,7 +21,6 @@ from tekoa.visualization.ui_utils import (
     plot_correlation_network
 )
 
-logger = logging.getLogger(__name__)
 
 class HeaderComponent:
     """Header component for the dashboard."""
@@ -29,7 +28,7 @@ class HeaderComponent:
     @staticmethod
     def render(data_manager: DataManager):
         """Render the dashboard header."""
-        st.image("https://www.nursing.arizona.edu/sites/default/files/styles/max_width_full/public/2023-04/tc%20banner%20home%20hero.png?itok=nJQD6jVY", use_container_width=True)
+        # st.image("https://www.nursing.arizona.edu/sites/default/files/styles/max_width_full/public/2023-04/tc%20banner%20home%20hero.png?itok=nJQD6jVY", use_container_width=True)
 
         # Check data status and display indicator
         data_loaded = data_manager.data is not None

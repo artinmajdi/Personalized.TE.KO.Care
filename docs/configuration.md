@@ -50,7 +50,7 @@ For development environments, use the provided Conda setup script:
 
 ### Manual Conda Configuration
 
-For advanced users who need custom Conda configurations:
+For advanced users who need custom Conda configuration:
 
 1. Create the environment from specification:
    ```bash

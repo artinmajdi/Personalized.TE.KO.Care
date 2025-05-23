@@ -13,8 +13,8 @@ import time
 import json
 from typing import Dict, List, Optional, Tuple, Any, Union
 
+from tekoa import logger
 from tekoa.io import DataLoader
-
 from tekoa.utils import (
     VariableScreener,
     DimensionalityReducer,
@@ -22,9 +22,9 @@ from tekoa.utils import (
     ClusteringManager,
     characterize_phenotypes
 )
-from tekoa.configurations.params import DatasetNames
+from tekoa.configuration.params import DatasetNames
 
-logger = logging.getLogger(__name__)
+
 
 class DataManager:
     """Manager for TE-KOA data loading, processing, and state management."""
@@ -819,7 +819,7 @@ class DataManager:
                     calculated_pca_n_components = min(actual_optimal_famd_components_count, len(numeric_vars), len(current_data_for_dim_reduction) - 1)
                 else: # Fallback if actual_optimal_famd_components_count was not determined
                     calculated_pca_n_components = min(10, len(numeric_vars), len(current_data_for_dim_reduction) - 1)
-                
+
                 if calculated_pca_n_components <= 0:
                     logger.error(f"Calculated PCA components is {calculated_pca_n_components}, which is invalid. Min(10, num_numeric_vars, num_samples-1) resulted in this.")
                     raise ValueError("Invalid number of components calculated for PCA.")

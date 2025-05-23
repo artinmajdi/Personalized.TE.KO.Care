@@ -13,7 +13,7 @@ The TE-KOA project is structured as a Python package with several modules that h
 ```
 tekoa/
 ├── io/                   # Input/output operations
-├── configurations/       # Configuration settings
+├── configuration/       # Configuration settings
 ├── utils/                # Utility functions
 └── visualization/        # Data visualization components
 ```
@@ -47,8 +47,8 @@ The configuration management components handle:
 
 Key modules:
 
-- `settings.py` in `tekoa/configurations/`: Defines application settings
-- `params.py` in `tekoa/configurations/`: Defines parameter values
+- `settings.py` in `tekoa/configuration/`: Defines application settings
+- `params.py` in `tekoa/configuration/`: Defines parameter values
 
 ### Visualization
 

@@ -11,7 +11,7 @@ import socket
 from pathlib import Path
 import streamlit.web.cli as stcli
 from streamlit.web.cli import _main_run
-
+from tekoa import logger
 
 def is_port_in_use(port: int) -> bool:
     """Check if a port is already in use."""

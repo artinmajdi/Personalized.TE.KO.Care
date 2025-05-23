@@ -3,20 +3,19 @@ import numpy as np
 import plotly.graph_objects as go
 from sklearn.preprocessing import MinMaxScaler
 from scipy.stats import zscore
-import logging
 from typing import Optional, List, Tuple # Corrected List and Tuple imports
 
-logger = logging.getLogger(__name__)
+from tekoa import logger
 
 def generate_radar_chart_data(
-    original_data: pd.DataFrame, 
-    labels: np.ndarray, 
-    numeric_vars: List[str], 
-    cluster_col_name: str = 'Cluster', 
+    original_data: pd.DataFrame,
+    labels: np.ndarray,
+    numeric_vars: List[str],
+    cluster_col_name: str = 'Cluster',
     scaler_type: str = 'zscore'
 ) -> pd.DataFrame:
     """
-    Generates data suitable for a radar chart by calculating the mean of specified 
+    Generates data suitable for a radar chart by calculating the mean of specified
     numeric variables for each cluster, after optional scaling.
 
     Args:
@@ -25,9 +24,9 @@ def generate_radar_chart_data(
         numeric_vars: List of numeric variable names to include in the radar chart.
         cluster_col_name: Name for the cluster label column that will be added to the data.
         scaler_type: Type of scaling to apply. Options:
-                     'zscore': Standardizes data to have mean 0 and std 1.
-                     'minmax': Scales data to a [0, 1] range.
-                     'none': No scaling is applied.
+                    'zscore': Standardizes data to have mean 0 and std 1.
+                    'minmax': Scales data to a [0, 1] range.
+                    'none'  : No scaling is applied.
 
     Returns:
         A Pandas DataFrame where rows are clusters and columns are the (potentially scaled)
@@ -68,7 +67,7 @@ def generate_radar_chart_data(
     # Drop rows with NaNs *only in the selected valid numeric variables* before scaling
     # This prevents issues with scalers if NaNs are present.
     data_for_scaling = data_with_labels[valid_numeric_vars + [cluster_col_name]].dropna(subset=valid_numeric_vars)
-    
+
     if data_for_scaling.empty:
         logger.warning("generate_radar_chart_data: DataFrame became empty after dropping NaNs from selected numeric variables.")
         return pd.DataFrame()
@@ -80,11 +79,11 @@ def generate_radar_chart_data(
             # Apply zscore, handling columns that might be constant (std=0) which results in NaNs
             scaled_vars_df = scaled_vars_df.apply(lambda x: zscore(x, nan_policy='propagate') if x.notna().any() else x)
             # If zscore results in all NaNs for a column (e.g., constant value), fill with 0
-            scaled_vars_df = scaled_vars_df.fillna(0) 
+            scaled_vars_df = scaled_vars_df.fillna(0)
         except Exception as e:
             logger.error(f"generate_radar_chart_data: Error during Z-score scaling: {e}")
             return pd.DataFrame() # Return empty on scaling error
-            
+
     elif scaler_type == 'minmax':
         try:
             scaler = MinMaxScaler()
@@ -103,7 +102,7 @@ def generate_radar_chart_data(
     # Combine scaled numeric vars back with cluster labels from data_for_scaling
     # Ensure indices align after potential row drops by NaNs
     data_to_group = scaled_vars_df.join(data_for_scaling[cluster_col_name])
-    
+
     if data_to_group.empty:
          logger.warning("generate_radar_chart_data: Data became empty before grouping. This might indicate an issue with scaling or joining.")
          return pd.DataFrame()
@@ -113,26 +112,26 @@ def generate_radar_chart_data(
     except Exception as e:
         logger.error(f"generate_radar_chart_data: Error during groupby mean calculation: {e}")
         return pd.DataFrame()
-        
+
     logger.info(f"Radar chart data generated successfully with scaler: {scaler_type}. Shape: {radar_df.shape}")
     return radar_df
 
 
 def plot_radar_chart(
-    radar_data: pd.DataFrame, 
-    title: str, 
+    radar_data: pd.DataFrame,
+    title: str,
     value_range: Optional[Tuple[float, float]] = None
 ) -> go.Figure:
     """
     Creates a radar chart (spider plot) from pre-calculated radar data.
 
     Args:
-        radar_data: Pandas DataFrame where rows are clusters (or groups) and 
+        radar_data: Pandas DataFrame where rows are clusters (or groups) and
                     columns are variables. Values are typically means of these variables.
                     This should be the output from `generate_radar_chart_data`.
         title: The title for the radar chart.
         value_range: Optional tuple (min_val, max_val) to set the range for the
-                     radial axis. If None, Plotly auto-scales the axis. 
+                     radial axis. If None, Plotly auto-scales the axis.
                      Useful for scaled data (e.g., (0, 1) for minmax, or (-3, 3) for zscore).
 
     Returns:

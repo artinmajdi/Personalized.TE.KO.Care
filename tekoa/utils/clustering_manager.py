@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
-import logging
 from typing import Any
 
+
+from tekoa import logger
 from tekoa.utils.clustering_algorithms import perform_kmeans, perform_pam, perform_gmm
 from tekoa.utils.clustering_validation import (
     calculate_silhouette_score,
@@ -10,7 +11,6 @@ from tekoa.utils.clustering_validation import (
     calculate_model_native_score
 )
 
-logger = logging.getLogger(__name__)
 
 class ClusteringManager:
     """

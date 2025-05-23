@@ -68,7 +68,7 @@ tekoa/
 │   ├── __init__.py           # Package initialization
 │   ├── cli.py                # Command-line interface
 │   ├── main.py               # Main entry point
-│   ├── configurations/       # Configuration settings
+│   ├── configuration/       # Configuration settings
 │   │   ├── __init__.py
 │   │   ├── params.py         # Parameter definitions
 │   │   └── settings.py       # Application settings

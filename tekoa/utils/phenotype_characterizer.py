@@ -1,9 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy import stats as scipy_stats # f_oneway, chi2_contingency
-import logging
-
-logger = logging.getLogger(__name__)
+from tekoa import logger
 
 def _calculate_eta_squared(f_statistic: float, df_between: int, df_within: int) -> float:
     """
@@ -80,7 +78,7 @@ def compare_variable_across_clusters(data_with_labels: pd.DataFrame, variable: s
         if len(valid_groups) < 2:
             logger.warning(f"Variable '{variable}': Not enough valid groups (<2) for ANOVA after dropping empty groups.")
             return {**default_error_return, 'TestType': 'ANOVA_NotEnoughGroups'}
-        
+
         # Check if all group means are identical or groups have zero variance (scipy's f_oneway limitation)
         # Or if any group has zero variance and there are only two groups
         group_means = [g.mean() for g in valid_groups]
@@ -106,7 +104,7 @@ def compare_variable_across_clusters(data_with_labels: pd.DataFrame, variable: s
             if contingency_table.shape[0] < 2 or contingency_table.shape[1] < 2:
                 logger.warning(f"Variable '{variable}': Contingency table too small for Chi-Square test ({contingency_table.shape}).")
                 return {**default_error_return, 'TestType': 'ChiSquare_SmallTable'}
-            
+
             chi2, p, dof, expected = scipy_stats.chi2_contingency(contingency_table)
             n_obs = contingency_table.sum().sum()
             cram_v = _calculate_cramers_v(chi2, n_obs, contingency_table.shape[1], contingency_table.shape[0])
@@ -146,10 +144,10 @@ def characterize_phenotypes(original_data: pd.DataFrame, labels: np.ndarray, var
         if variable not in original_data.columns:
             logger.warning(f"Variable '{variable}' not found in original_data. Skipping.")
             results_list.append({
-                'Variable': variable, 
-                'TestType': 'Error_VariableNotFoundInSource', 
-                'Statistic': np.nan, 
-                'PValue': np.nan, 
+                'Variable': variable,
+                'TestType': 'Error_VariableNotFoundInSource',
+                'Statistic': np.nan,
+                'PValue': np.nan,
                 'EffectSize': np.nan
             })
             continue
@@ -158,7 +156,7 @@ def characterize_phenotypes(original_data: pd.DataFrame, labels: np.ndarray, var
 
     if not results_list:
         return pd.DataFrame(columns=expected_cols)
-        
+
     results_df = pd.DataFrame(results_list)
 
     # Initialize FDR columns
@@ -167,7 +165,7 @@ def characterize_phenotypes(original_data: pd.DataFrame, labels: np.ndarray, var
 
     # Apply FDR correction
     valid_p_values_idx = results_df['PValue'].notna() & (results_df['PValue'] >= 0) & (results_df['PValue'] <= 1)
-    
+
     if valid_p_values_idx.any():
         p_values_to_correct = results_df.loc[valid_p_values_idx, 'PValue']
         if not p_values_to_correct.empty:
@@ -189,8 +187,8 @@ def characterize_phenotypes(original_data: pd.DataFrame, labels: np.ndarray, var
     for col in expected_cols:
         if col not in results_df.columns:
             if col == 'RejectNullFDR':
-                results_df[col] = pd.NA 
+                results_df[col] = pd.NA
             else:
                 results_df[col] = np.nan
-    
+
     return results_df[expected_cols]

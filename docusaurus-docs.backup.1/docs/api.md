@@ -152,7 +152,7 @@ Runs the command-line interface.
 Application settings and configuration.
 
 ```python
-from tekoa.configurations.settings import get_settings
+from tekoa.configuration.settings import get_settings
 ```
 
 ```python
@@ -170,7 +170,7 @@ Returns the application settings.
 Parameter definitions for the application.
 
 ```python
-from tekoa.configurations.params import get_params
+from tekoa.configuration.params import get_params
 ```
 
 ```python

@@ -3,9 +3,7 @@ import numpy as np
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 from sklearn.cluster import KMeans # For type hinting
 from sklearn.mixture import GaussianMixture # For type hinting
-import logging
-
-logger = logging.getLogger(__name__)
+from tekoa import logger
 
 def calculate_silhouette_score(data: pd.DataFrame, labels: np.ndarray) -> float:
     """

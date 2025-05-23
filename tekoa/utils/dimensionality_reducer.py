@@ -7,7 +7,6 @@ This module provides functionality for dimensionality reduction including:
 - Component visualization and interpretation
 """
 
-import logging
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple
@@ -15,9 +14,10 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from prince import FAMD
+from tekoa import logger
 
-logger = logging.getLogger(__name__)
 
+# TODO: currently, evertime user wants to change anything in the dashboard, it keeps reloading the dataset. i shoudl fix it so that it would only load the dataset once. ideally not reset teh whole dashboard until user has clicked on the "Perform PCA" or "Perform FAMD" button
 
 class DimensionalityReducer:
     """Class for reducing dimensionality of TE-KOA dataset variables."""

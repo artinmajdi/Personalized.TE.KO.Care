@@ -22,30 +22,31 @@ classifiers = [
 keywords = ["nursing research", "healthcare", "AI", "medical analysis"]
 requires-python = ">=3.10"
 dependencies = [
-    "numpy",
-    "pandas",
-    "matplotlib",
-    "seaborn",
-    "streamlit",
-    "openpyxl",
     "altair",
-    "plotly",
-    "scikit-learn",
-    "pytest",
-    "watchdog",
-    "protobuf",
-    "sacremoses",
+    "colorcet",
+    "matplotlib",
+    "networkx",
+    "numpy",
+    "openpyxl",
+    "pandas",
     "pillow",
+    "plotly",
+    "prince",
+    "protobuf",
     "pydantic",
+    "pytest",
+    "pytest-mock",
     "python-dotenv",
+    "rich",
+    "sacremoses",
+    "scikit-learn",
+    "scipy",
+    "seaborn",
     "shap",
     "statsmodels",
-    "scipy",
-    "prince",
-    "colorcet",
-    "networkx",
+    "streamlit",
+    "watchdog",
     "wordcloud",
-    "pytest-mock",
 ]
 
 [project.urls]
@@ -55,7 +56,7 @@ Repository    = "https://github.com/artinmajdi/tekoa.git"
 Issues        = "https://github.com/artinmajdi/tekoa/issues"
 
 [project.scripts]
-tekoa = "tekoa.cli:run_dashboard"
+ui = "tekoa.cli:run_dashboard"
 
 [tool.setuptools]
 packages = [

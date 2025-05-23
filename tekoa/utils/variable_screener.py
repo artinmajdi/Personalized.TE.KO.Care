@@ -8,16 +8,14 @@ This module provides functionality for variable screening including:
 - Clinical vs. statistical variable importance evaluation
 """
 
-import logging
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Set
-import matplotlib.pyplot as plt
-import seaborn as sns
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.preprocessing import StandardScaler
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tekoa import logger
 
 
 class VariableScreener:

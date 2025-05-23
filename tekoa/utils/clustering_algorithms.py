@@ -2,14 +2,14 @@ import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
-import logging
+
 
 try:
     from sklearn_extra.cluster import KMedoids
 except ModuleNotFoundError:
     KMedoids = None  # Placeholder if not found
 
-logger = logging.getLogger(__name__)
+from tekoa import logger
 
 def perform_kmeans(data: pd.DataFrame, n_clusters: int, random_state: int = None) -> tuple[KMeans, np.ndarray]:
     """
@@ -18,8 +18,7 @@ def perform_kmeans(data: pd.DataFrame, n_clusters: int, random_state: int = None
     Args:
         data: Pandas DataFrame containing the data to cluster.
         n_clusters: The number of clusters to form.
-        random_state: Determines random number generation for centroid initialization.
-                      Use an int to make the randomness deterministic.
+        random_state: Determines random number generation for centroid initialization. Use an int to make the randomness deterministic.
 
     Returns:
         A tuple containing:

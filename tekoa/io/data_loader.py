@@ -13,8 +13,7 @@ import pandas as pd
 import numpy as np
 from sklearn.impute import KNNImputer
 from sklearn.preprocessing import StandardScaler
-
-logger = logging.getLogger(__name__)
+from tekoa import logger
 
 
 DATASET_NAME = 'te_koa_R01_only_RCT_data.xlsx'
@@ -26,10 +25,8 @@ class DataLoader:
         Initialize the DataLoader.
 
         Args:
-            data_dir: Path to the data directory or default Excel file.
-            uploaded_file: An uploaded file object (e.g., from Streamlit), path to an Excel file,
-                           or any object pandas.read_excel can handle. If provided, this will be used
-                           for loading data, taking precedence over data_dir.
+            data_dir     : Path to the data directory or default Excel file.
+            uploaded_file: An uploaded file object (e.g., from Streamlit), path to an Excel file, or any object pandas.read_excel can handle. If provided, this will be used for loading data, taking precedence over data_dir.
         """
         self.uploaded_file = uploaded_file  # Store the uploaded_file instance variable
         if data_dir is None:
@@ -383,26 +380,50 @@ class DataLoader:
             return None
 
         # Try to find the variable in the data dictionary
-        try:
-            # Look for exact match
-            matches = self.data_dict[self.data_dict['Variable'] == variable_name]
-
-            if len(matches) == 0:
-                # Try case-insensitive match
-                matches = self.data_dict[self.data_dict['Variable'].str.lower() == variable_name.lower()]
-
-            if len(matches) == 0:
-                # Try substring match
-                matches = self.data_dict[self.data_dict['Variable'].str.contains(variable_name, case=False, regex=False)]
-
-            if len(matches) > 0:
-                return matches.iloc[0]['Description']
-            else:
-                return None
-
-        except Exception as e:
-            logger.error(f"Error getting variable description: {e}")
+        # try:
+        # Look for exact match
+        # Ensure 'Variable' and 'Description' columns exist in the data dictionary
+        if 'Variable' not in self.data_dict.columns or 'Description' not in self.data_dict.columns:
+            logger.warning("Data dictionary is missing 'Variable' or 'Description' column(s).")
             return None
+
+        # Ensure variable_name is a string (as per type hint, but good for robustness)
+        if not isinstance(variable_name, str):
+            logger.warning(f"Provided variable_name '{variable_name}' is not a string. Cannot search.")
+            return None
+
+        # Attempt 1: Exact match (original behavior, sensitive to type of 'Variable' column entries)
+        matches = self.data_dict[self.data_dict['Variable'] == variable_name]
+
+        if matches.empty: # Use .empty for idiomatic check
+            # Attempt 2: Case-insensitive match
+            # Convert 'Variable' column to string to safely use .str accessor and .lower()
+            try:
+                variable_col_as_str_lower = self.data_dict['Variable'].astype(str).str.lower()
+                matches = self.data_dict[variable_col_as_str_lower == variable_name.lower()]
+            except Exception as e:
+                logger.debug(f"Error during case-insensitive match for '{variable_name}': {e}")
+                # matches remains empty, will proceed to next check or return None
+
+        if matches.empty:
+            # Attempt 3: Substring match (case-insensitive)
+            # Convert 'Variable' column to string to safely use .str.contains()
+            try:
+                variable_col_as_str = self.data_dict['Variable'].astype(str)
+                matches = self.data_dict[variable_col_as_str.str.contains(variable_name, case=False, regex=False)]
+            except Exception as e:
+                logger.debug(f"Error during substring match for '{variable_name}': {e}")
+                # matches remains empty
+
+        if not matches.empty:
+            return matches.iloc[0]['Description']
+        else:
+            # logger.info(f"No description found for variable '{variable_name}'.") # Optional: for more verbose logging
+            return None
+
+        # except Exception as e:
+        #     logger.error(f"Error getting variable description: {e}")
+        #     return None
 
     def get_variable_categories(self, category: str = None) -> Union[Dict[str, List[str]], List[str]]:
         """

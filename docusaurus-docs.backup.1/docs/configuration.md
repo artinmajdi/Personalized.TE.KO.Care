@@ -18,7 +18,7 @@ The TE-KOA application uses environment variables for configuration. These can b
 
 ## Application Configuration
 
-The application's behavior can be configured through the settings in `tekoa/configurations/settings.py`. This file contains various parameters that control the application's functionality.
+The application's behavior can be configured through the settings in `tekoa/configuration/settings.py`. This file contains various parameters that control the application's functionality.
 
 ### Data Loading Configuration
 
