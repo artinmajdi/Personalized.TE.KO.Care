@@ -12,24 +12,7 @@ setup_logging()
 
 
 from .io import DataLoader, analyze_dictionary, analyze_excel_file
-from .utils import (
-    VariableScreener,
-    DimensionalityReducer,
-    DataQualityEnhancer,
-    ClusteringManager,
-    characterize_phenotypes,
-    compare_variable_across_clusters,
-    perform_kmeans,
-    perform_pam,
-    perform_gmm,
-    calculate_silhouette_score,
-    calculate_davies_bouldin_score,
-    calculate_model_native_score,
-    plot_radar_chart,
-    generate_radar_chart_data
-)
-
-
+from .utils import VariableScreener, DimensionalityReducer, DataQualityEnhancer
 from .visualization import Dashboard, DataManager, pages
 
 
@@ -47,17 +30,6 @@ __all__ = [
     'VariableScreener',
     'DimensionalityReducer',
     'DataQualityEnhancer',
-    'ClusteringManager',
-    'characterize_phenotypes',
-    'compare_variable_across_clusters',
-    'perform_kmeans',
-    'perform_pam',
-    'perform_gmm',
-    'calculate_silhouette_score',
-    'calculate_davies_bouldin_score',
-    'calculate_model_native_score',
-    'plot_radar_chart',
-    'generate_radar_chart_data',
 
     # Visualization
     'Dashboard',
