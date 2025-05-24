@@ -12,6 +12,14 @@ import time
 import json
 from typing import Dict, List, Optional, Tuple, Any, Union
 
+# Assuming these will be available or mocked from tekoa library
+# from tekoa.clustering import find_optimal_clusters, perform_clustering, calculate_silhouette_scores
+# from tekoa.validation import calculate_bootstrap_stability
+# For now, using sklearn placeholders for some functionalities if tekoa.clustering is not ready
+from sklearn.cluster import KMeans # Placeholder for tekoa.clustering.perform_clustering
+from sklearn.metrics import silhouette_score, silhouette_samples # Placeholder for tekoa.clustering.calculate_silhouette_scores
+import numpy as np # Ensure numpy is imported for array operations
+
 from tekoa import logger
 from tekoa.io import DataLoader
 from tekoa.utils import (
@@ -50,8 +58,12 @@ class DataManager:
             st.session_state.processed_data = None
         if 'pipeline_results' not in st.session_state:
             st.session_state.pipeline_results = {}
-        if 'phenotypes' not in st.session_state:
+        if 'phenotypes' not in st.session_state: # This might be used by phenotyping results
             st.session_state.phenotypes = None
+        if 'phenotyping_results' not in st.session_state: # For storing results of perform_auto_phenotyping
+            st.session_state.phenotyping_results = None
+        if 'phenotype_names' not in st.session_state: # For user-defined phenotype names
+            st.session_state.phenotype_names = {}
         if 'current_page' not in st.session_state:
             st.session_state.current_page = 'Overview'
 
@@ -684,3 +696,281 @@ class DataManager:
 
         filename = "te_koa_pipeline_report.md"
         return report, filename, "markdown"
+
+    # --- Phase-II: Auto-Phenotyping, Exploration, and Validation ---
+
+    def perform_auto_phenotyping(self, processed_data: pd.DataFrame, clustering_params: Optional[Dict] = None) -> Dict[str, Any]:
+        """
+        Perform auto-phenotyping using clustering on the processed data.
+
+        Args:
+            processed_data: DataFrame containing the data to be clustered.
+            clustering_params: Optional dictionary of parameters for clustering.
+                               Example: {'n_clusters': 3, 'method': 'kmeans', ...}
+
+        Returns:
+            Dictionary containing clustering results:
+                - 'cluster_labels': Array of cluster labels for each sample.
+                - 'n_clusters': Optimal number of clusters found.
+                - 'silhouette_score': Average silhouette score for the clustering.
+                - 'silhouette_values': Silhouette scores for each sample.
+        """
+        if processed_data is None or processed_data.empty:
+            logger.warning("perform_auto_phenotyping: Processed data is not available.")
+            return {}
+
+        logger.info("Starting auto-phenotyping...")
+
+        # Smart defaults for clustering_params if None
+        if clustering_params is None:
+            clustering_params = {
+                'n_clusters': None,  # Placeholder to find optimal K
+                'method': 'kmeans',
+                'random_state': 42
+            }
+
+        # Placeholder for finding optimal number of clusters
+        # optimal_k = tekoa.clustering.find_optimal_clusters(processed_data, k_range=(2, 10))
+        # For now, let's assume a fixed number or one from params if provided
+        n_clusters = clustering_params.get('n_clusters')
+        if n_clusters is None:
+            # Simple heuristic for now: trying a few k values and picking the best silhouette score
+            best_score = -1
+            best_k = 2
+            best_labels = None
+            for k_try in range(2, min(6, len(processed_data)-1)): # Try k from 2 to 5 or less if not enough samples
+                try:
+                    kmeans = KMeans(n_clusters=k_try, random_state=clustering_params.get('random_state', 42), n_init='auto')
+                    labels_try = kmeans.fit_predict(processed_data)
+                    if len(np.unique(labels_try)) > 1: # Silhouette score requires at least 2 labels
+                        score_try = silhouette_score(processed_data, labels_try)
+                        if score_try > best_score:
+                            best_score = score_try
+                            best_k = k_try
+                            best_labels = labels_try
+                except Exception as e:
+                    logger.warning(f"Error during optimal k search for k={k_try}: {e}")
+                    continue
+            if best_labels is None: # Fallback if all k_try failed
+                 kmeans = KMeans(n_clusters=2, random_state=clustering_params.get('random_state', 42), n_init='auto') # Default to 2 clusters
+                 cluster_labels = kmeans.fit_predict(processed_data)
+                 n_clusters = 2
+            else:
+                cluster_labels = best_labels
+                n_clusters = best_k
+            logger.info(f"Determined optimal number of clusters: {n_clusters} with silhouette score: {best_score if best_score != -1 else 'N/A'}")
+
+        else:
+            # Perform clustering using specified parameters (e.g., from tekoa.clustering)
+            # cluster_labels = tekoa.clustering.perform_clustering(
+            #     processed_data,
+            #     method=clustering_params.get('method', 'kmeans'),
+            #     n_clusters=n_clusters,
+            #     random_state=clustering_params.get('random_state', 42)
+            # )
+            # Using KMeans placeholder
+            kmeans = KMeans(n_clusters=n_clusters, random_state=clustering_params.get('random_state', 42), n_init='auto')
+            cluster_labels = kmeans.fit_predict(processed_data)
+
+        # Calculate silhouette scores (e.g., from tekoa.clustering or sklearn)
+        # silhouette_avg = tekoa.clustering.calculate_silhouette_scores(processed_data, cluster_labels)['average']
+        # sample_silhouette_values = tekoa.clustering.calculate_silhouette_scores(processed_data, cluster_labels)['samples']
+        if len(np.unique(cluster_labels)) > 1:
+            silhouette_avg = silhouette_score(processed_data, cluster_labels)
+            sample_silhouette_values = silhouette_samples(processed_data, cluster_labels)
+        else: # Handle cases with only one cluster (silhouette score is undefined)
+            silhouette_avg = -1 # Or some other indicator
+            sample_silhouette_values = np.zeros(len(processed_data))
+            logger.warning("Only one cluster found, silhouette scores cannot be meaningfully computed.")
+
+
+        results = {
+            'cluster_labels': cluster_labels,
+            'n_clusters': n_clusters,
+            'silhouette_score': silhouette_avg,
+            'silhouette_values': sample_silhouette_values,
+            'params': clustering_params
+        }
+
+        # Update session state
+        st.session_state.phenotyping_results = results
+        if 'pipeline_results' not in st.session_state:
+            st.session_state.pipeline_results = {}
+        st.session_state.pipeline_results['phenotyping'] = {
+            'method': clustering_params.get('method', 'kmeans'),
+            'n_clusters': n_clusters,
+            'silhouette_score': silhouette_avg,
+            'data_shape': processed_data.shape
+        }
+        logger.info(f"Auto-phenotyping complete. Found {n_clusters} clusters with score {silhouette_avg:.3f}.")
+        return results
+
+    def get_silhouette_plot_data(self, clustering_results: Optional[Dict] = None) -> Optional[Dict]:
+        """
+        Prepare data suitable for rendering a silhouette plot.
+
+        Args:
+            clustering_results: The output from perform_auto_phenotyping.
+                                If None, tries to use st.session_state.phenotyping_results.
+
+        Returns:
+            Dictionary containing data for silhouette plot:
+                - 'silhouette_values': Silhouette scores for each sample.
+                - 'cluster_labels': Cluster label for each sample.
+                - 'n_clusters': Number of clusters.
+                - 'silhouette_avg': Average silhouette score.
+        """
+        if clustering_results is None:
+            clustering_results = st.session_state.get('phenotyping_results')
+
+        if not clustering_results or 'silhouette_values' not in clustering_results or 'cluster_labels' not in clustering_results:
+            logger.warning("get_silhouette_plot_data: Clustering results not available or incomplete.")
+            return None
+
+        return {
+            'silhouette_values': clustering_results['silhouette_values'],
+            'cluster_labels': clustering_results['cluster_labels'],
+            'n_clusters': clustering_results['n_clusters'],
+            'silhouette_avg': clustering_results['silhouette_score']
+        }
+
+    def get_phenotype_radar_chart_data(self, phenotype_id: int, processed_data_with_clusters: pd.DataFrame, features: Optional[List[str]] = None) -> Optional[Dict[str, float]]:
+        """
+        Calculate mean values of selected features for a given phenotype (cluster).
+
+        Args:
+            phenotype_id: The cluster label (phenotype identifier).
+            processed_data_with_clusters: DataFrame containing processed data and 'cluster_labels' column.
+            features: Optional list of features for the radar chart. If None, all numeric features are used.
+
+        Returns:
+            Dictionary of feature means for the phenotype, or None if data is invalid.
+        """
+        if processed_data_with_clusters is None or 'cluster_labels' not in processed_data_with_clusters.columns:
+            logger.warning("get_phenotype_radar_chart_data: Data with cluster labels is not available.")
+            return None
+
+        phenotype_data = processed_data_with_clusters[processed_data_with_clusters['cluster_labels'] == phenotype_id]
+
+        if phenotype_data.empty:
+            logger.warning(f"get_phenotype_radar_chart_data: No data found for phenotype_id {phenotype_id}.")
+            return None
+
+        if features is None:
+            features = phenotype_data.select_dtypes(include=np.number).columns.tolist()
+            if 'cluster_labels' in features: # Exclude the label itself
+                features.remove('cluster_labels')
+        
+        # Ensure features exist in the dataframe
+        valid_features = [f for f in features if f in phenotype_data.columns]
+        if not valid_features:
+            logger.warning(f"get_phenotype_radar_chart_data: None of the specified features are available in the data for phenotype_id {phenotype_id}.")
+            return None
+            
+        radar_data = phenotype_data[valid_features].mean().to_dict()
+        logger.info(f"Generated radar chart data for phenotype {phenotype_id} with {len(valid_features)} features.")
+        return radar_data
+
+    def get_patients_for_phenotype(self, phenotype_id: int, processed_data_with_clusters: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """
+        Get patient identifiers belonging to a specific phenotype (cluster).
+        Assumes patient identifiers are in the index of the DataFrame.
+
+        Args:
+            phenotype_id: The cluster label (phenotype identifier).
+            processed_data_with_clusters: DataFrame containing processed data, cluster labels, and patient IDs in index.
+
+        Returns:
+            DataFrame containing patient identifiers for the phenotype, or None.
+        """
+        if processed_data_with_clusters is None or 'cluster_labels' not in processed_data_with_clusters.columns:
+            logger.warning("get_patients_for_phenotype: Data with cluster labels is not available.")
+            return None
+
+        patients_data = processed_data_with_clusters[processed_data_with_clusters['cluster_labels'] == phenotype_id]
+        
+        if patients_data.empty:
+            logger.warning(f"get_patients_for_phenotype: No patients found for phenotype_id {phenotype_id}.")
+            return pd.DataFrame() # Return empty DataFrame
+
+        logger.info(f"Retrieved {len(patients_data)} patients for phenotype {phenotype_id}.")
+        return patients_data.index.to_frame() # Assuming patient IDs are in the index
+
+    def save_phenotype_name(self, phenotype_id: int, phenotype_name: str):
+        """
+        Store a user-defined name for a given phenotype_id.
+
+        Args:
+            phenotype_id: The cluster label (phenotype identifier).
+            phenotype_name: The user-defined name for the phenotype.
+        """
+        if 'phenotype_names' not in st.session_state:
+            st.session_state.phenotype_names = {}
+        st.session_state.phenotype_names[phenotype_id] = phenotype_name
+        logger.info(f"Saved name '{phenotype_name}' for phenotype_id {phenotype_id}.")
+
+    def get_phenotype_name(self, phenotype_id: int) -> str:
+        """
+        Retrieve the user-defined name for a phenotype_id.
+
+        Args:
+            phenotype_id: The cluster label (phenotype identifier).
+
+        Returns:
+            The user-defined name, or a default name if not set.
+        """
+        if 'phenotype_names' not in st.session_state:
+            st.session_state.phenotype_names = {}
+        return st.session_state.phenotype_names.get(phenotype_id, f"Phenotype {phenotype_id}")
+
+    def get_phenotype_stability_data(self, clustering_results: Optional[Dict] = None) -> Optional[Dict]:
+        """
+        Get phenotype stability metrics using bootstrap validation.
+        (Placeholder for tekoa.validation.calculate_bootstrap_stability)
+
+        Args:
+            clustering_results: The output from perform_auto_phenotyping.
+                                If None, tries to use st.session_state.phenotyping_results.
+
+        Returns:
+            Dictionary containing stability data (e.g., Jaccard index, silhouette distributions).
+        """
+        if clustering_results is None:
+            clustering_results = st.session_state.get('phenotyping_results')
+
+        if not clustering_results or st.session_state.processed_data is None:
+            logger.warning("get_phenotype_stability_data: Clustering results or processed data not available.")
+            return None
+
+        # Placeholder call to a tekoa validation function
+        # stability_metrics = tekoa.validation.calculate_bootstrap_stability(
+        #     st.session_state.processed_data,
+        #     clustering_results['cluster_labels'],
+        #     n_bootstraps=50, # Example parameter
+        #     clustering_params=clustering_results.get('params', {})
+        # )
+        # Mocked stability data for now
+        logger.info("Calculating phenotype stability (using mocked data)...")
+        mock_jaccard_scores = np.random.rand(clustering_results['n_clusters']) * 0.2 + 0.75 # Scores between 0.75 and 0.95
+        mock_silhouette_dist = [np.random.normal(loc=clustering_results['silhouette_score'], scale=0.05, size=50) for _ in range(clustering_results['n_clusters'])]
+
+        stability_metrics = {
+            'jaccard_scores_per_cluster': mock_jaccard_scores.tolist(),
+            'avg_jaccard_score': np.mean(mock_jaccard_scores).item(),
+            'silhouette_bootstrap_distributions': [s.tolist() for s in mock_silhouette_dist], # per cluster
+            'n_bootstraps': 50 # Example
+        }
+        
+        # Update pipeline results
+        if 'pipeline_results' not in st.session_state:
+            st.session_state.pipeline_results = {}
+        if 'phenotyping' not in st.session_state.pipeline_results:
+             st.session_state.pipeline_results['phenotyping'] = {}
+        st.session_state.pipeline_results['phenotyping']['stability'] = {
+            'avg_jaccard_score': stability_metrics['avg_jaccard_score'],
+            'n_bootstraps': stability_metrics['n_bootstraps']
+        }
+        
+        logger.info(f"Phenotype stability calculated (mocked): Avg Jaccard {stability_metrics['avg_jaccard_score']:.3f}")
+        return stability_metrics
+

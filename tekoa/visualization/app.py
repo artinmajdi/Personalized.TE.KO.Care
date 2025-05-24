@@ -30,7 +30,10 @@ from tekoa.visualization.pages import (
     DimensionalityPage,
     QualityPage,
     TreatmentGroupsPage,
-    PipelinePage
+    PipelinePage,
+    AutoPhenotypingPage,
+    PhenotypeExplorerPage,
+    ValidationDashboardPage
 )
 
 class Dashboard:
@@ -122,6 +125,16 @@ class Dashboard:
 
         elif current_page == 'Pipeline & Export':
             PipelinePage.render(self.data_manager)
+
+        # Phase II Pages
+        elif current_page == 'Auto-Phenotyping':
+            AutoPhenotypingPage.render(self.data_manager)
+
+        elif current_page == 'Phenotype Explorer':
+            PhenotypeExplorerPage.render(self.data_manager)
+
+        elif current_page == 'Validation Dashboard':
+            ValidationDashboardPage.render(self.data_manager)
 
         else:
             st.warning(f"Unknown page: {current_page}")

@@ -18,8 +18,12 @@ from tekoa.visualization.ui_utils import (
     COLOR_PALETTE,
     TREATMENT_COLORS,
     create_download_link,
-    plot_correlation_network
+    plot_correlation_network,
+    # Placeholder for a potential radar chart utility, if created later in ui_utils
+    # plot_radar_chart
 )
+from plotly.graph_objects import Figure, Scatterpolar, Layout # For Radar Charts
+from sklearn.preprocessing import MinMaxScaler # For scaling data for radar charts
 
 
 class HeaderComponent:
@@ -134,6 +138,20 @@ class SidebarComponent:
 
             if st.button("💾 Pipeline & Export", use_container_width=True):
                 st.session_state.current_page = 'Pipeline & Export'
+                st.rerun()
+
+            st.markdown("#### Phase II: Guided Phenotype Discovery")
+
+            if st.button("🧬 Auto-Phenotyping", use_container_width=True):
+                st.session_state.current_page = 'Auto-Phenotyping'
+                st.rerun()
+
+            if st.button("探索 Phenotype Explorer", use_container_width=True):
+                st.session_state.current_page = 'Phenotype Explorer'
+                st.rerun()
+
+            if st.button("🛡️ Validation Dashboard", use_container_width=True):
+                st.session_state.current_page = 'Validation Dashboard'
                 st.rerun()
 
             # Status indicators
@@ -3601,3 +3619,494 @@ class PipelinePage:
                 st.button("Proceed to Phase II (Coming Soon)", disabled=True)
         else:
             st.warning("No processed data available. Please complete at least one pipeline step first.")
+
+
+# --- Phase II Page Components ---
+
+class AutoPhenotypingPage:
+    """Auto-Phenotyping page component for the dashboard."""
+
+    @staticmethod
+    def render(data_manager: DataManager):
+        """Render the auto-phenotyping page."""
+        st.header("Auto-Phenotyping: Discovering Patient Subgroups")
+
+        if st.session_state.processed_data is None:
+            st.warning("Processed data is not available. Please complete the data preparation pipeline first.")
+            return
+
+        st.markdown("""
+        This section uses clustering algorithms to automatically identify potential patient phenotypes
+        (subgroups) based on the prepared data. The silhouette plot helps determine the optimal
+        number of clusters.
+        """)
+
+        # --- Clustering Controls ---
+        st.subheader("Clustering Configuration")
+        col1, col2 = st.columns(2)
+        with col1:
+            # Placeholder for more clustering methods if added later
+            clustering_method = st.selectbox("Clustering Method", ["KMeans"], index=0,
+                                             help="Currently, only KMeans is supported.")
+        with col2:
+            # Allow user to specify k, or leave blank for auto-detection
+            n_clusters_input = st.number_input("Number of Clusters (k)", min_value=2, max_value=10, value=None,
+                                      help="Leave blank or set to None for automatic detection based on silhouette scores (tries k=2 to 5).")
+
+        if st.button("🚀 Find Phenotypes", use_container_width=True):
+            with st.spinner("Performing clustering and silhouette analysis... Please wait."):
+                # Simulate progress (Streamlit's progress bar is tricky with non-iterable tasks)
+                progress_bar = st.progress(0)
+                st.session_state.phenotyping_results = None # Reset previous results
+
+                # Ensure processed_data is available in DataManager
+                processed_data = data_manager.get_data()
+                if processed_data is None or processed_data.empty:
+                    st.error("Processed data is missing. Cannot perform phenotyping.")
+                    progress_bar.empty()
+                    return
+
+                clustering_params = {'method': clustering_method.lower()}
+                if n_clusters_input:
+                    clustering_params['n_clusters'] = int(n_clusters_input)
+                else:
+                    clustering_params['n_clusters'] = None # Auto-detect
+
+                # Perform phenotyping
+                results = data_manager.perform_auto_phenotyping(
+                    processed_data=processed_data,
+                    clustering_params=clustering_params
+                )
+                progress_bar.progress(50) # Mid-point
+
+                if results and 'cluster_labels' in results:
+                    st.session_state.phenotyping_results = results
+                    st.success(f"Auto-phenotyping complete! Found {results.get('n_clusters', 'N/A')} potential phenotypes.")
+                    logger.info(f"Phenotyping results: {results}")
+                else:
+                    st.error("Auto-phenotyping failed or returned no results. Check logs for details.")
+                progress_bar.progress(100)
+                progress_bar.empty()
+
+
+        # --- Display Phenotyping Results ---
+        if 'phenotyping_results' in st.session_state and st.session_state.phenotyping_results:
+            results = st.session_state.phenotyping_results
+            st.subheader("Phenotyping Results")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Optimal Number of Clusters (Phenotypes)", results.get('n_clusters', "N/A"))
+            with col2:
+                silhouette_avg = results.get('silhouette_score', None)
+                if silhouette_avg is not None:
+                    st.metric("Average Silhouette Score", f"{silhouette_avg:.3f}")
+                else:
+                    st.metric("Average Silhouette Score", "N/A")
+
+            # --- Silhouette Plot ---
+            st.markdown("#### Silhouette Plot")
+            st.markdown("""
+            The silhouette plot displays a measure of how close each point in one cluster is to points in the
+            neighboring clusters.
+            - **Interpretation:**
+                - A high average silhouette score (closer to 1) indicates well-defined clusters.
+                - Scores near 0 indicate overlapping clusters.
+                - Negative scores suggest that samples might have been assigned to the wrong cluster.
+                - The thickness of the silhouette for each cluster indicates its size.
+                - Ideally, all clusters should have silhouettes above the average score.
+            """)
+
+            plot_data = data_manager.get_silhouette_plot_data(results)
+
+            if plot_data:
+                try:
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    y_lower = 10
+                    silhouette_values = plot_data['silhouette_values']
+                    cluster_labels = plot_data['cluster_labels']
+                    n_clusters = plot_data['n_clusters']
+                    silhouette_avg = plot_data['silhouette_avg']
+
+                    for i in range(n_clusters):
+                        ith_cluster_silhouette_values = silhouette_values[cluster_labels == i]
+                        ith_cluster_silhouette_values.sort()
+                        size_cluster_i = ith_cluster_silhouette_values.shape[0]
+                        y_upper = y_lower + size_cluster_i
+
+                        color = plt.cm.nipy_spectral(float(i) / n_clusters)
+                        ax.fill_betweenx(np.arange(y_lower, y_upper), 0, ith_cluster_silhouette_values,
+                                         facecolor=color, edgecolor=color, alpha=0.7)
+                        ax.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
+                        y_lower = y_upper + 10
+
+                    ax.set_title("Silhouette Plot for the Various Clusters")
+                    ax.set_xlabel("Silhouette Coefficient Values")
+                    ax.set_ylabel("Cluster Label")
+                    ax.axvline(x=silhouette_avg, color="red", linestyle="--", label=f"Avg: {silhouette_avg:.2f}")
+                    ax.set_yticks([])  # Clear the yaxis labels / ticks
+                    ax.set_xticks(np.arange(-0.2, 1.1, 0.2)) # More granular ticks
+                    ax.legend()
+                    st.pyplot(fig)
+                    plt.close(fig) # Explicitly close plot
+                except Exception as e:
+                    st.error(f"Could not generate silhouette plot: {e}")
+                    logger.error(f"Silhouette plot error: {e}", exc_info=True)
+            else:
+                st.info("Silhouette plot data is not available.")
+
+            if st.button("Proceed to Phenotype Explorer ▶️", use_container_width=True):
+                st.session_state.current_page = 'Phenotype Explorer'
+                st.rerun()
+        else:
+            st.info("Click 'Find Phenotypes' to start the auto-phenotyping process.")
+
+
+class PhenotypeExplorerPage:
+    """Phenotype Explorer page component for the dashboard."""
+
+    @staticmethod
+    def _create_radar_chart(data_dict: Dict[str, float], title: str) -> Figure:
+        """Helper to create a Plotly radar chart."""
+        categories = list(data_dict.keys())
+        values = list(data_dict.values())
+
+        fig = Figure()
+        fig.add_trace(Scatterpolar(
+            r=values,
+            theta=categories,
+            fill='toself',
+            name='Phenotype Profile'
+        ))
+        fig.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 1])), # Assuming data is scaled 0-1
+            showlegend=False,
+            title=title,
+            height=400
+        )
+        return fig
+
+    @staticmethod
+    def render(data_manager: DataManager):
+        """Render the phenotype explorer page."""
+        st.header("Phenotype Explorer")
+
+        if 'phenotyping_results' not in st.session_state or not st.session_state.phenotyping_results:
+            st.warning("Phenotyping has not been performed yet. Please go to the 'Auto-Phenotyping' page first.")
+            if st.button("Go to Auto-Phenotyping"):
+                st.session_state.current_page = 'Auto-Phenotyping'
+                st.rerun()
+            return
+
+        phenotyping_results = st.session_state.phenotyping_results
+        n_clusters = phenotyping_results.get('n_clusters')
+        cluster_labels = phenotyping_results.get('cluster_labels')
+        processed_data = data_manager.get_data() # Get the data used for clustering
+
+        if processed_data is None or cluster_labels is None:
+            st.error("Processed data or cluster labels are missing from phenotyping results.")
+            return
+        
+        # Ensure 'cluster_labels' is added to the processed_data for easy filtering
+        # Make a copy to avoid modifying the original session state data if it's directly from there
+        data_with_clusters = processed_data.copy()
+        data_with_clusters['cluster_labels'] = cluster_labels
+
+        st.markdown("Explore the characteristics of each identified patient phenotype.")
+
+        # --- Phenotype Selection and Naming ---
+        st.sidebar.subheader("Phenotype Selection")
+        available_phenotypes = sorted(list(np.unique(cluster_labels)))
+        selected_phenotype_id = st.sidebar.selectbox(
+            "Select Phenotype (Cluster ID)",
+            options=available_phenotypes,
+            format_func=lambda x: data_manager.get_phenotype_name(x) # Show custom name if available
+        )
+
+        if selected_phenotype_id is not None:
+            current_name = data_manager.get_phenotype_name(selected_phenotype_id)
+            st.sidebar.markdown(f"#### Currently Viewing: {current_name}")
+
+            new_name = st.sidebar.text_input("Edit Phenotype Name", value=current_name)
+            if st.sidebar.button("Save Name", key=f"save_name_{selected_phenotype_id}"):
+                if new_name and new_name.strip():
+                    data_manager.save_phenotype_name(selected_phenotype_id, new_name.strip())
+                    st.sidebar.success(f"Name for Phenotype {selected_phenotype_id} saved as '{new_name.strip()}'.")
+                    st.rerun() # Rerun to update selectbox format_func
+                else:
+                    st.sidebar.error("Phenotype name cannot be empty.")
+
+            # --- Radar Chart for Selected Phenotype ---
+            st.subheader(f"Radar Chart: {data_manager.get_phenotype_name(selected_phenotype_id)}")
+            
+            # Select features for radar chart - use all numeric features by default
+            numeric_cols = processed_data.select_dtypes(include=np.number).columns.tolist()
+            if not numeric_cols:
+                st.warning("No numeric features available in the processed data for radar chart.")
+            else:
+                # For radar charts, data should ideally be scaled (e.g., 0-1 or standardized)
+                # Here, we'll use MinMaxScaler on the means for visualization purposes.
+                # A more robust approach would be to scale features before calculating means.
+                radar_data_raw = data_manager.get_phenotype_radar_chart_data(
+                    phenotype_id=selected_phenotype_id,
+                    processed_data_with_clusters=data_with_clusters,
+                    features=numeric_cols # Use all numeric features
+                )
+
+                if radar_data_raw:
+                    # Scale the mean values for better radar chart visualization
+                    scaler = MinMaxScaler()
+                    # Fit scaler on all phenotype means to maintain relative differences if comparing
+                    # For simplicity here, just scaling current phenotype's means
+                    scaled_values = scaler.fit_transform(np.array(list(radar_data_raw.values())).reshape(-1, 1)).flatten()
+                    radar_data_scaled = dict(zip(radar_data_raw.keys(), scaled_values))
+
+                    try:
+                        # radar_fig = plot_radar_chart(radar_data_scaled, title=f"Profile for {data_manager.get_phenotype_name(selected_phenotype_id)}")
+                        # Basic Plotly radar chart implementation:
+                        radar_fig = PhenotypeExplorerPage._create_radar_chart(radar_data_scaled, f"Profile for {data_manager.get_phenotype_name(selected_phenotype_id)}")
+                        st.plotly_chart(radar_fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Could not generate radar chart: {e}")
+                        logger.error(f"Radar chart error: {e}", exc_info=True)
+                else:
+                    st.info("Radar chart data could not be generated for the selected phenotype.")
+
+
+            # --- Patient List ---
+            st.subheader(f"Patients in {data_manager.get_phenotype_name(selected_phenotype_id)}")
+            with st.expander("View Patient List"):
+                patients_df = data_manager.get_patients_for_phenotype(
+                    phenotype_id=selected_phenotype_id,
+                    processed_data_with_clusters=data_with_clusters
+                )
+                if patients_df is not None and not patients_df.empty:
+                    st.dataframe(patients_df)
+                    csv = patients_df.to_csv(index=True).encode('utf-8') # Assuming index is patient ID
+                    st.download_button(
+                        label=f"Download Patient List for {data_manager.get_phenotype_name(selected_phenotype_id)}",
+                        data=csv,
+                        file_name=f"phenotype_{selected_phenotype_id}_patients.csv",
+                        mime="text/csv",
+                    )
+                elif patients_df is not None and patients_df.empty:
+                     st.info("No patients found for this phenotype (this might indicate an issue if unexpected).")
+                else:
+                    st.info("Could not retrieve patient list.")
+
+            # --- Side-by-Side Comparison ---
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("Phenotype Comparison")
+            phenotypes_to_compare = st.sidebar.multiselect(
+                "Select two phenotypes to compare",
+                options=available_phenotypes,
+                default=available_phenotypes[:2] if len(available_phenotypes) >= 2 else [],
+                max_selections=2,
+                format_func=lambda x: data_manager.get_phenotype_name(x)
+            )
+
+            if len(phenotypes_to_compare) == 2:
+                st.subheader("Side-by-Side Phenotype Comparison")
+                p1_id, p2_id = phenotypes_to_compare[0], phenotypes_to_compare[1]
+                name_p1 = data_manager.get_phenotype_name(p1_id)
+                name_p2 = data_manager.get_phenotype_name(p2_id)
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"#### {name_p1}")
+                    radar_data_p1_raw = data_manager.get_phenotype_radar_chart_data(p1_id, data_with_clusters, numeric_cols)
+                    if radar_data_p1_raw:
+                        scaler1 = MinMaxScaler() # Scale independently for now
+                        scaled_values_p1 = scaler1.fit_transform(np.array(list(radar_data_p1_raw.values())).reshape(-1, 1)).flatten()
+                        radar_data_p1_scaled = dict(zip(radar_data_p1_raw.keys(), scaled_values_p1))
+                        # radar_fig_p1 = plot_radar_chart(radar_data_p1_scaled, title=f"Profile for {name_p1}")
+                        radar_fig_p1 = PhenotypeExplorerPage._create_radar_chart(radar_data_p1_scaled, f"Profile for {name_p1}")
+                        st.plotly_chart(radar_fig_p1, use_container_width=True)
+                    else:
+                        st.info(f"Could not generate radar data for {name_p1}.")
+
+                with col2:
+                    st.markdown(f"#### {name_p2}")
+                    radar_data_p2_raw = data_manager.get_phenotype_radar_chart_data(p2_id, data_with_clusters, numeric_cols)
+                    if radar_data_p2_raw:
+                        scaler2 = MinMaxScaler() # Scale independently for now
+                        scaled_values_p2 = scaler2.fit_transform(np.array(list(radar_data_p2_raw.values())).reshape(-1, 1)).flatten()
+                        radar_data_p2_scaled = dict(zip(radar_data_p2_raw.keys(), scaled_values_p2))
+                        # radar_fig_p2 = plot_radar_chart(radar_data_p2_scaled, title=f"Profile for {name_p2}")
+                        radar_fig_p2 = PhenotypeExplorerPage._create_radar_chart(radar_data_p2_scaled, f"Profile for {name_p2}")
+                        st.plotly_chart(radar_fig_p2, use_container_width=True)
+                    else:
+                        st.info(f"Could not generate radar data for {name_p2}.")
+                
+                # Comparative table (simple version)
+                if radar_data_p1_raw and radar_data_p2_raw:
+                    comp_df = pd.DataFrame({'Feature': list(radar_data_p1_raw.keys()),
+                                            name_p1: list(radar_data_p1_raw.values()),
+                                            name_p2: list(radar_data_p2_raw.values())})
+                    comp_df['Difference (P1 - P2)'] = comp_df[name_p1] - comp_df[name_p2]
+                    st.subheader("Feature Mean Comparison (Raw Values)")
+                    st.dataframe(comp_df.style.format({name_p1: "{:.2f}", name_p2: "{:.2f}", 'Difference (P1 - P2)': "{:.2f}"}))
+
+
+class ValidationDashboardPage:
+    """Validation Dashboard page component for the dashboard."""
+
+    @staticmethod
+    def _initialize_checklist_state():
+        """Initialize session state for checklist items if not already present."""
+        default_checklist_items = {
+            "item_distinct_interpretable": {"label": "Phenotypes are distinct and interpretable.", "checked": False},
+            "item_clinical_knowledge": {"label": "Phenotype characteristics align with clinical knowledge.", "checked": False},
+            "item_treatment_response": {"label": "Phenotypes show potential for differential treatment response.", "checked": False},
+            "item_stability": {"label": "Phenotypes demonstrate acceptable stability (e.g., via bootstrapping).", "checked": False},
+            "item_actionable": {"label": "Insights from phenotypes are actionable for research or clinical practice.", "checked": False},
+        }
+        if 'validation_checklist' not in st.session_state:
+            st.session_state.validation_checklist = default_checklist_items
+        else: # Ensure all default keys are present if some were added manually before
+            for key, value in default_checklist_items.items():
+                if key not in st.session_state.validation_checklist:
+                    st.session_state.validation_checklist[key] = value
+
+
+    @staticmethod
+    def render(data_manager: DataManager):
+        """Render the validation dashboard page."""
+        st.header("Phenotype Validation Dashboard")
+        ValidationDashboardPage._initialize_checklist_state()
+
+        if 'phenotyping_results' not in st.session_state or not st.session_state.phenotyping_results:
+            st.warning("Phenotyping has not been performed yet. Please go to the 'Auto-Phenotyping' page first.")
+            if st.button("Go to Auto-Phenotyping"):
+                st.session_state.current_page = 'Auto-Phenotyping'
+                st.rerun()
+            return
+
+        phenotyping_results = st.session_state.phenotyping_results
+
+        st.markdown("""
+        This dashboard helps assess the quality and reliability of the identified patient phenotypes.
+        It includes stability metrics and a checklist for clinical meaningfulness.
+        """)
+
+        # --- Stability Meter/Metrics ---
+        st.subheader("Phenotype Stability Assessment")
+        if st.button("🔄 Calculate/Refresh Stability Metrics"):
+            with st.spinner("Calculating stability metrics (mocked)..."):
+                # This would call data_manager.get_phenotype_stability_data()
+                # which currently returns mocked data.
+                stability_data = data_manager.get_phenotype_stability_data(phenotyping_results)
+                if stability_data:
+                    st.session_state.stability_data = stability_data # Store in session state for persistence
+                    st.success("Stability metrics updated.")
+                else:
+                    st.error("Could not retrieve stability data.")
+        
+        if 'stability_data' in st.session_state and st.session_state.stability_data:
+            stability_data = st.session_state.stability_data
+            avg_jaccard = stability_data.get('avg_jaccard_score', 0)
+
+            # Basic "Stability Meter" using st.metric or a progress bar
+            st.markdown("#### Average Jaccard Index (Bootstrap Stability)")
+            st.markdown(f"""
+            The Jaccard index measures similarity between sets. Here, it's used to assess how consistently
+            samples are assigned to the same cluster during bootstrap resampling.
+            Higher scores (closer to 1) indicate better stability.
+            - **> 0.85:** Highly stable
+            - **0.75 - 0.85:** Stable
+            - **0.6 - 0.75:** Moderately stable
+            - **< 0.6:** Unstable
+            """)
+            
+            # Visual Gauge (simple version using st.progress or st.metric)
+            # A more sophisticated gauge would require a custom component or Plotly.
+            if avg_jaccard >= 0.85:
+                st.metric(label="Average Jaccard Index", value=f"{avg_jaccard:.3f}", delta="Highly Stable", delta_color="normal")
+                st.progress(int(avg_jaccard * 100))
+            elif avg_jaccard >= 0.75:
+                st.metric(label="Average Jaccard Index", value=f"{avg_jaccard:.3f}", delta="Stable", delta_color="normal")
+                st.progress(int(avg_jaccard * 100))
+            elif avg_jaccard >= 0.6:
+                st.metric(label="Average Jaccard Index", value=f"{avg_jaccard:.3f}", delta="Moderately Stable", delta_color="inverse")
+                st.progress(int(avg_jaccard * 100))
+            else:
+                st.metric(label="Average Jaccard Index", value=f"{avg_jaccard:.3f}", delta="Unstable", delta_color="inverse")
+                st.progress(int(avg_jaccard * 100))
+
+
+            # Display other stability metrics (e.g., silhouette distributions)
+            if 'silhouette_bootstrap_distributions' in stability_data:
+                st.markdown("#### Silhouette Score Distributions (Bootstrap)")
+                st.markdown("Distribution of average silhouette scores from bootstrap runs for each original cluster.")
+                
+                # For simplicity, just showing overall average from bootstrap, not per-cluster plots yet
+                # This would be a good place for box plots per cluster if data is structured that way
+                all_bootstrap_sil_scores = []
+                for dist in stability_data['silhouette_bootstrap_distributions']:
+                    all_bootstrap_sil_scores.extend(dist)
+                
+                if all_bootstrap_sil_scores:
+                    fig = px.histogram(pd.DataFrame({'Bootstrap Silhouette Scores': all_bootstrap_sil_scores}), 
+                                     x='Bootstrap Silhouette Scores', 
+                                     title='Overall Distribution of Bootstrap Silhouette Scores',
+                                     nbins=20)
+                    original_avg_sil = phenotyping_results.get('silhouette_score', 0)
+                    fig.add_vline(x=original_avg_sil, line_dash="dash", line_color="red", 
+                                  annotation_text=f"Original Avg Silhouette: {original_avg_sil:.2f}")
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No silhouette bootstrap distribution data to display.")
+        else:
+            st.info("Click 'Calculate/Refresh Stability Metrics' to view stability information.")
+
+
+        # --- Clinical Meaningfulness Checklist ---
+        st.subheader("Clinical Meaningfulness Checklist")
+        st.markdown("Evaluate the practical relevance and interpretability of the identified phenotypes.")
+
+        for item_key, item_props in st.session_state.validation_checklist.items():
+            st.session_state.validation_checklist[item_key]["checked"] = st.checkbox(
+                item_props["label"],
+                value=item_props["checked"],
+                key=f"chk_{item_key}"
+            )
+        
+        # Calculate completion
+        checked_items = sum(1 for item in st.session_state.validation_checklist.values() if item["checked"])
+        total_items = len(st.session_state.validation_checklist)
+        completion_percentage = (checked_items / total_items) * 100
+        
+        st.markdown("---")
+        st.progress(int(completion_percentage))
+        st.markdown(f"**Checklist Completion: {checked_items}/{total_items} ({completion_percentage:.0f}%)**")
+
+
+        # --- Export Phenotype Report ---
+        st.subheader("Export Report")
+        st.markdown("Generate a report summarizing the phenotype discovery process, characteristics, and validation.")
+        if st.button("📄 Export Phenotype Report (Placeholder)", use_container_width=True):
+            # Placeholder for data_manager.export_phenotype_report()
+            # For now, can show a message or try to export phenotyping_results as JSON
+            with st.spinner("Generating phenotype report..."):
+                try:
+                    # Mock report generation for now
+                    report_data = {
+                        "phenotyping_summary": st.session_state.get('phenotyping_results'),
+                        "stability_summary": st.session_state.get('stability_data'),
+                        "validation_checklist": st.session_state.get('validation_checklist')
+                    }
+                    report_json = pd.io.json.dumps(report_data, indent=2) # Use pandas for better numpy handling
+                    
+                    st.download_button(
+                        label="Download Phenotype Report (JSON)",
+                        data=report_json,
+                        file_name="phenotype_validation_report.json",
+                        mime="application/json"
+                    )
+                    st.success("Phenotype report (JSON) prepared for download.")
+                except Exception as e:
+                    st.error(f"Failed to generate report: {e}")
+                    logger.error(f"Phenotype report generation error: {e}", exc_info=True)
+
+        if st.button("Proceed to Treatment Effect Heterogeneity (Phase III) ▶️", use_container_width=True, disabled=True):
+            st.info("Phase III components are planned for future development.")
