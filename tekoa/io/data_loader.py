@@ -16,7 +16,7 @@ from sklearn.preprocessing import StandardScaler
 from tekoa import logger
 
 
-DATASET_NAME = 'te_koa_R01_only_RCT_data.xlsx'
+DATASET_NAME = 'teoka_R01_only_RCT_data.xlsx'
 class DataLoader:
     """An enhanced data loader for the Knee Osteoarthritis dataset."""
 
@@ -32,7 +32,7 @@ class DataLoader:
         if data_dir is None:
             # Try to find a reasonable default path
             possible_paths = [
-                f"/Users/artinmajdi/Documents/GitHubs/RAP/te_koa_c__lee/dataset/{DATASET_NAME}",
+                f"/Users/artinmajdi/Documents/GitHubs/RAP/teoka_c__lee/dataset/{DATASET_NAME}",
                 f"./dataset/{DATASET_NAME}",
                 f"./{DATASET_NAME}"
             ]
