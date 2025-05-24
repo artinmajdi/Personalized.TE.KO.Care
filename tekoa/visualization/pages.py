@@ -3804,24 +3804,51 @@ class PhenotypeExplorerPage:
         phenotyping_results = st.session_state.phenotyping_results
         n_clusters          = phenotyping_results.get('n_clusters')
         cluster_labels      = phenotyping_results.get('cluster_labels')
-        processed_data      = data_manager.get_data() # Get the data used for clustering
+        clustered_data_index = phenotyping_results.get('clustered_data_index')
+        processed_data      = data_manager.get_data() # Get the data that might have been used for clustering
 
-        if processed_data is None or cluster_labels is None:
-            st.error("Processed data or cluster labels are missing from phenotyping results.")
+        if processed_data is None or cluster_labels is None or clustered_data_index is None:
+            st.error("Critical data (processed_data, cluster_labels, or clustered_data_index) is missing from phenotyping results.")
             return
 
-        # Ensure 'cluster_labels' is added to the processed_data for easy filtering
-        # Make a copy to avoid modifying the original session state data if it's directly from there
-        data_with_clusters = processed_data.copy()
+        if not isinstance(clustered_data_index, pd.Index) or clustered_data_index.empty:
+            st.error(f"The index of clustered data is invalid or empty. Type: {type(clustered_data_index)}")
+            return
+
+        if len(cluster_labels) != len(clustered_data_index):
+            st.error(f"Length of cluster labels ({len(cluster_labels)}) does not match length of clustered data index ({len(clustered_data_index)}). Cannot assign labels.")
+            return
+
+        # Ensure 'cluster_labels' is added to the correct subset of processed_data
+        # Filter processed_data to include only rows that were actually clustered
+        try:
+            # Make a copy to avoid modifying the original session state data or data_manager's data
+            data_with_clusters = processed_data.loc[clustered_data_index].copy()
+        except KeyError as e:
+            # This can happen if processed_data has changed and no longer contains all items from clustered_data_index
+            st.error(f"Error aligning data with cluster labels using the provided index. Some indexed rows might be missing from the current processed_data: {e}")
+            logger.error(f"KeyError in PhenotypeExplorerPage.render: processed_data.loc[clustered_data_index]. Original clustered_data_index length: {len(clustered_data_index)}. Processed_data length: {len(processed_data)}.")
+            # Log a few example indices to help debug
+            logger.debug(f"Sample of clustered_data_index: {list(clustered_data_index[:5])}")
+            logger.debug(f"Sample of processed_data.index: {list(processed_data.index[:5])}")
+            # Find missing keys
+            missing_keys = clustered_data_index.difference(processed_data.index)
+            logger.error(f"Number of missing keys in processed_data.index: {len(missing_keys)}. Sample missing keys: {list(missing_keys[:5])}")
+            return
+        except Exception as e:
+            st.error(f"An unexpected error occurred while filtering data with cluster index: {e}")
+            logger.error(f"Unexpected error in PhenotypeExplorerPage.render during .loc: {e}")
+            return
+
         data_with_clusters['cluster_labels'] = cluster_labels
 
         st.markdown("Explore the characteristics of each identified patient phenotype.")
 
         # --- Phenotype Selection and Naming ---
-        st.sidebar.subheader("Phenotype Selection")
+        st.subheader("Phenotype Selection")
         available_phenotypes = sorted(list(np.unique(cluster_labels)))
 
-        selected_phenotype_id = st.sidebar.selectbox(
+        selected_phenotype_id = st.selectbox(
             label       = "Select Phenotype (Cluster ID)",
             options     = available_phenotypes,
             format_func = lambda x: data_manager.get_phenotype_name(x) # Show custom name if available
@@ -3829,19 +3856,18 @@ class PhenotypeExplorerPage:
 
         if selected_phenotype_id is not None:
             current_name = data_manager.get_phenotype_name(selected_phenotype_id)
-            st.sidebar.markdown(f"#### Currently Viewing: {current_name}")
+            st.markdown(f"#### Currently Viewing: {current_name}")
 
-            new_name = st.sidebar.text_input("Edit Phenotype Name", value=current_name)
+            new_name = st.text_input("Edit Phenotype Name", value=current_name)
 
-            if st.sidebar.button("Save Name", key=f"save_name_{selected_phenotype_id}"):
+            if st.button("Save Name", key=f"save_name_{selected_phenotype_id}"):
                 if new_name and new_name.strip():
 
                     data_manager.save_phenotype_name(selected_phenotype_id, new_name.strip())
-                    st.sidebar.success(f"Name for Phenotype {selected_phenotype_id} saved as '{new_name.strip()}'.")
+                    st.success(f"Name for Phenotype {selected_phenotype_id} saved as '{new_name.strip()}'.")
                     st.rerun() # Rerun to update selectbox format_func
-
                 else:
-                    st.sidebar.error("Phenotype name cannot be empty.")
+                    st.error("Phenotype name cannot be empty.")
 
             # --- Radar Chart for Selected Phenotype ---
             st.subheader(f"Radar Chart: {data_manager.get_phenotype_name(selected_phenotype_id)}")
@@ -3897,22 +3923,23 @@ class PhenotypeExplorerPage:
                         mime="text/csv",
                     )
                 elif patients_df is not None and patients_df.empty:
-                     st.info("No patients found for this phenotype (this might indicate an issue if unexpected).")
+                    st.info("No patients found for this phenotype (this might indicate an issue if unexpected).")
                 else:
                     st.info("Could not retrieve patient list.")
 
             # --- Side-by-Side Comparison ---
-            st.sidebar.markdown("---")
-            st.sidebar.subheader("Phenotype Comparison")
-            phenotypes_to_compare = st.sidebar.multiselect(
-                "Select two phenotypes to compare",
-                options=available_phenotypes,
-                default=available_phenotypes[:2] if len(available_phenotypes) >= 2 else [],
-                max_selections=2,
-                format_func=lambda x: data_manager.get_phenotype_name(x)
+            st.markdown("---")
+            st.subheader("Phenotype Comparison")
+            phenotypes_to_compare = st.multiselect(
+                label          = "Select two phenotypes to compare",
+                options        = available_phenotypes,
+                default        = available_phenotypes[:2] if len(available_phenotypes) >= 2 else [],
+                max_selections = 2,
+                format_func    = lambda x: data_manager.get_phenotype_name(x)
             )
 
             if len(phenotypes_to_compare) == 2:
+
                 st.subheader("Side-by-Side Phenotype Comparison")
                 p1_id, p2_id = phenotypes_to_compare[0], phenotypes_to_compare[1]
                 name_p1 = data_manager.get_phenotype_name(p1_id)
@@ -3923,12 +3950,12 @@ class PhenotypeExplorerPage:
                     st.markdown(f"#### {name_p1}")
                     radar_data_p1_raw = data_manager.get_phenotype_radar_chart_data(p1_id, data_with_clusters, numeric_cols)
                     if radar_data_p1_raw:
-                        scaler1 = MinMaxScaler() # Scale independently for now
-                        scaled_values_p1 = scaler1.fit_transform(np.array(list(radar_data_p1_raw.values())).reshape(-1, 1)).flatten()
+                        scaler1              = MinMaxScaler() # Scale independently for now
+                        scaled_values_p1     = scaler1.fit_transform(np.array(list(radar_data_p1_raw.values())).reshape(-1, 1)).flatten()
                         radar_data_p1_scaled = dict(zip(radar_data_p1_raw.keys(), scaled_values_p1))
-                        # radar_fig_p1 = plot_radar_chart(radar_data_p1_scaled, title=f"Profile for {name_p1}")
-                        radar_fig_p1 = PhenotypeExplorerPage._create_radar_chart(radar_data_p1_scaled, f"Profile for {name_p1}")
-                        st.plotly_chart(radar_fig_p1, use_container_width=True)
+                        # radar_fig_p1         = plot_radar_chart(radar_data_p1_scaled, title=f"Profile for {name_p1}")
+                        radar_fig_p1         = PhenotypeExplorerPage._create_radar_chart(radar_data_p1_scaled, f"Profile for {name_p1}")
+                        st.plotly_chart(radar_fig_p1, use_container_width=True, key=f"radar_chart_p1_{p1_id}")
                     else:
                         st.info(f"Could not generate radar data for {name_p1}.")
 
@@ -3936,12 +3963,12 @@ class PhenotypeExplorerPage:
                     st.markdown(f"#### {name_p2}")
                     radar_data_p2_raw = data_manager.get_phenotype_radar_chart_data(p2_id, data_with_clusters, numeric_cols)
                     if radar_data_p2_raw:
-                        scaler2 = MinMaxScaler() # Scale independently for now
-                        scaled_values_p2 = scaler2.fit_transform(np.array(list(radar_data_p2_raw.values())).reshape(-1, 1)).flatten()
+                        scaler2              = MinMaxScaler() # Scale independently for now
+                        scaled_values_p2     = scaler2.fit_transform(np.array(list(radar_data_p2_raw.values())).reshape(-1, 1)).flatten()
                         radar_data_p2_scaled = dict(zip(radar_data_p2_raw.keys(), scaled_values_p2))
-                        # radar_fig_p2 = plot_radar_chart(radar_data_p2_scaled, title=f"Profile for {name_p2}")
-                        radar_fig_p2 = PhenotypeExplorerPage._create_radar_chart(radar_data_p2_scaled, f"Profile for {name_p2}")
-                        st.plotly_chart(radar_fig_p2, use_container_width=True)
+                        # radar_fig_p2         = plot_radar_chart(radar_data_p2_scaled, title=f"Profile for {name_p2}")
+                        radar_fig_p2         = PhenotypeExplorerPage._create_radar_chart(radar_data_p2_scaled, f"Profile for {name_p2}")
+                        st.plotly_chart(radar_fig_p2, use_container_width=True, key=f"radar_chart_p2_{p2_id}")
                     else:
                         st.info(f"Could not generate radar data for {name_p2}.")
 

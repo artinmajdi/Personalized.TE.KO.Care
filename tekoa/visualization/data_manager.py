@@ -706,7 +706,7 @@ class DataManager:
         Args:
             processed_data: DataFrame containing the data to be clustered.
             clustering_params: Optional dictionary of parameters for clustering.
-                               Example: {'n_clusters': 3, 'method': 'kmeans', ...}
+                                Example: {'n_clusters': 3, 'method': 'kmeans', ...}
 
         Returns:
             Dictionary containing clustering results:
@@ -721,11 +721,50 @@ class DataManager:
 
         logger.info("Starting auto-phenotyping...")
 
+        # Select only numeric columns for clustering
+        numeric_data = processed_data.select_dtypes(include=[np.number])
+
+        if numeric_data.empty:
+            logger.error("perform_auto_phenotyping: No numeric data available for clustering after filtering. Cannot proceed.")
+            return {
+                'error'              : "No numeric features available for phenotyping.",
+                'cluster_labels'     : np.array([]),
+                'clustered_data_index': pd.Index([]),
+                'n_clusters'         : 0,
+                'silhouette_score'   : -1,
+                'silhouette_values'  : np.array([]),
+                'params'             : clustering_params
+            }
+
+        excluded_cols = [col for col in processed_data.columns if col not in numeric_data.columns]
+        if excluded_cols:
+            logger.warning(f"perform_auto_phenotyping: Excluded non-numeric columns from clustering: {', '.join(excluded_cols)}")
+
+        # Remove rows with NaN values from numeric_data
+        if numeric_data.isnull().any().any():
+            rows_before_dropna = len(numeric_data)
+            numeric_data = numeric_data.dropna()
+            rows_after_dropna = len(numeric_data)
+            if rows_after_dropna < rows_before_dropna:
+                logger.warning(f"perform_auto_phenotyping: Removed {rows_before_dropna - rows_after_dropna} rows containing NaN values from data before clustering.")
+
+        if numeric_data.empty:
+            logger.error("perform_auto_phenotyping: No data available for clustering after removing NaN values. Cannot proceed.")
+            return {
+                'error'              : "No data available for phenotyping after NaN removal.",
+                'cluster_labels'     : np.array([]),
+                'clustered_data_index': pd.Index([]),
+                'n_clusters'         : 0,
+                'silhouette_score'   : -1,
+                'silhouette_values'  : np.array([]),
+                'params'             : clustering_params
+            }
+
         # Smart defaults for clustering_params if None
         if clustering_params is None:
             clustering_params = {
-                'n_clusters': None,  # Placeholder to find optimal K
-                'method': 'kmeans',
+                'n_clusters'  : None,     # Placeholder to find optimal K
+                'method'      : 'kmeans',
                 'random_state': 42
             }
 
@@ -735,29 +774,34 @@ class DataManager:
         n_clusters = clustering_params.get('n_clusters')
         if n_clusters is None:
             # Simple heuristic for now: trying a few k values and picking the best silhouette score
-            best_score = -1
-            best_k = 2
+            best_score  = -1
+            best_k      = 2
             best_labels = None
             for k_try in range(2, min(6, len(processed_data)-1)): # Try k from 2 to 5 or less if not enough samples
+
                 try:
                     kmeans = KMeans(n_clusters=k_try, random_state=clustering_params.get('random_state', 42), n_init='auto')
-                    labels_try = kmeans.fit_predict(processed_data)
+                    labels_try = kmeans.fit_predict(numeric_data)
                     if len(np.unique(labels_try)) > 1: # Silhouette score requires at least 2 labels
-                        score_try = silhouette_score(processed_data, labels_try)
+                        score_try = silhouette_score(numeric_data, labels_try)
                         if score_try > best_score:
-                            best_score = score_try
-                            best_k = k_try
+                            best_score  = score_try
+                            best_k      = k_try
                             best_labels = labels_try
+
                 except Exception as e:
                     logger.warning(f"Error during optimal k search for k={k_try}: {e}")
                     continue
+
             if best_labels is None: # Fallback if all k_try failed
-                 kmeans = KMeans(n_clusters=2, random_state=clustering_params.get('random_state', 42), n_init='auto') # Default to 2 clusters
-                 cluster_labels = kmeans.fit_predict(processed_data)
-                 n_clusters = 2
+                kmeans         = KMeans(n_clusters=2, random_state=clustering_params.get('random_state', 42), n_init='auto') # Default to 2 clusters
+                cluster_labels = kmeans.fit_predict(numeric_data)
+                n_clusters     = 2
+
             else:
                 cluster_labels = best_labels
-                n_clusters = best_k
+                n_clusters     = best_k
+
             logger.info(f"Determined optimal number of clusters: {n_clusters} with silhouette score: {best_score if best_score != -1 else 'N/A'}")
 
         else:
@@ -770,37 +814,40 @@ class DataManager:
             # )
             # Using KMeans placeholder
             kmeans = KMeans(n_clusters=n_clusters, random_state=clustering_params.get('random_state', 42), n_init='auto')
-            cluster_labels = kmeans.fit_predict(processed_data)
+            cluster_labels = kmeans.fit_predict(numeric_data)
 
         # Calculate silhouette scores (e.g., from tekoa.clustering or sklearn)
         # silhouette_avg = tekoa.clustering.calculate_silhouette_scores(processed_data, cluster_labels)['average']
         # sample_silhouette_values = tekoa.clustering.calculate_silhouette_scores(processed_data, cluster_labels)['samples']
         if len(np.unique(cluster_labels)) > 1:
-            silhouette_avg = silhouette_score(processed_data, cluster_labels)
-            sample_silhouette_values = silhouette_samples(processed_data, cluster_labels)
+            silhouette_avg           = silhouette_score(numeric_data, cluster_labels)
+            sample_silhouette_values = silhouette_samples(numeric_data, cluster_labels)
+
         else: # Handle cases with only one cluster (silhouette score is undefined)
-            silhouette_avg = -1 # Or some other indicator
-            sample_silhouette_values = np.zeros(len(processed_data))
+            silhouette_avg           = -1 # Or some other indicator
+            sample_silhouette_values = np.zeros(len(numeric_data))
             logger.warning("Only one cluster found, silhouette scores cannot be meaningfully computed.")
 
 
         results = {
-            'cluster_labels': cluster_labels,
-            'n_clusters': n_clusters,
-            'silhouette_score': silhouette_avg,
-            'silhouette_values': sample_silhouette_values,
-            'params': clustering_params
+            'cluster_labels'      : cluster_labels,
+            'clustered_data_index': numeric_data.index,
+            'n_clusters'          : n_clusters,
+            'silhouette_score'    : silhouette_avg,
+            'silhouette_values'   : sample_silhouette_values,
+            'params'              : clustering_params
         }
 
         # Update session state
         st.session_state.phenotyping_results = results
         if 'pipeline_results' not in st.session_state:
             st.session_state.pipeline_results = {}
+
         st.session_state.pipeline_results['phenotyping'] = {
-            'method': clustering_params.get('method', 'kmeans'),
-            'n_clusters': n_clusters,
+            'method'          : clustering_params.get('method', 'kmeans'),
+            'n_clusters'      : n_clusters,
             'silhouette_score': silhouette_avg,
-            'data_shape': processed_data.shape
+            'data_shape'      : processed_data.shape
         }
         logger.info(f"Auto-phenotyping complete. Found {n_clusters} clusters with score {silhouette_avg:.3f}.")
         return results
@@ -829,9 +876,9 @@ class DataManager:
 
         return {
             'silhouette_values': clustering_results['silhouette_values'],
-            'cluster_labels': clustering_results['cluster_labels'],
-            'n_clusters': clustering_results['n_clusters'],
-            'silhouette_avg': clustering_results['silhouette_score']
+            'cluster_labels'   : clustering_results['cluster_labels'],
+            'n_clusters'       : clustering_results['n_clusters'],
+            'silhouette_avg'   : clustering_results['silhouette_score']
         }
 
     def get_phenotype_radar_chart_data(self, phenotype_id: int, processed_data_with_clusters: pd.DataFrame, features: Optional[List[str]] = None) -> Optional[Dict[str, float]]:
@@ -860,13 +907,13 @@ class DataManager:
             features = phenotype_data.select_dtypes(include=np.number).columns.tolist()
             if 'cluster_labels' in features: # Exclude the label itself
                 features.remove('cluster_labels')
-        
+
         # Ensure features exist in the dataframe
         valid_features = [f for f in features if f in phenotype_data.columns]
         if not valid_features:
             logger.warning(f"get_phenotype_radar_chart_data: None of the specified features are available in the data for phenotype_id {phenotype_id}.")
             return None
-            
+
         radar_data = phenotype_data[valid_features].mean().to_dict()
         logger.info(f"Generated radar chart data for phenotype {phenotype_id} with {len(valid_features)} features.")
         return radar_data
@@ -888,7 +935,7 @@ class DataManager:
             return None
 
         patients_data = processed_data_with_clusters[processed_data_with_clusters['cluster_labels'] == phenotype_id]
-        
+
         if patients_data.empty:
             logger.warning(f"get_patients_for_phenotype: No patients found for phenotype_id {phenotype_id}.")
             return pd.DataFrame() # Return empty DataFrame
@@ -960,7 +1007,7 @@ class DataManager:
             'silhouette_bootstrap_distributions': [s.tolist() for s in mock_silhouette_dist], # per cluster
             'n_bootstraps': 50 # Example
         }
-        
+
         # Update pipeline results
         if 'pipeline_results' not in st.session_state:
             st.session_state.pipeline_results = {}
@@ -970,7 +1017,7 @@ class DataManager:
             'avg_jaccard_score': stability_metrics['avg_jaccard_score'],
             'n_bootstraps': stability_metrics['n_bootstraps']
         }
-        
+
         logger.info(f"Phenotype stability calculated (mocked): Avg Jaccard {stability_metrics['avg_jaccard_score']:.3f}")
         return stability_metrics
 
