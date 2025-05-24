@@ -7,7 +7,7 @@ including treatment comparison, longitudinal outcomes, and pain assessment visua
 
 from .app import Dashboard
 from .data_manager import DataManager
-
+from .phase2_pages import ClusteringPage, ValidationPage, CharacterizationPage
 from .pages import ( HeaderComponent,
                     SidebarComponent,
                     OverviewPage,
@@ -37,6 +37,11 @@ __all__ = [
         'QualityPage',
         'TreatmentGroupsPage',
         'PipelinePage',
+
+        # Phase 2 pages
+        'ClusteringPage',
+        'ValidationPage',
+        'CharacterizationPage',
 
         # Data manager
         'DataManager',
