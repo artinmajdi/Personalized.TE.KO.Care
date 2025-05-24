@@ -18,9 +18,9 @@ services:
     restart: unless-stopped
     # Choose the appropriate command based on your application type
     # For a Python script:
-    command: python -m teoka.main
+    command: python -m tekoa.main
     # For a Streamlit app (uncomment to use):
-    # command: streamlit run teoka/visualization/app.py
+    # command: streamlit run tekoa/visualization/app.py
 
   # Development service with hot-reload capabilities
   dev:
@@ -38,7 +38,7 @@ services:
       # Add your environment variables below
       - EXAMPLE_API_KEY=${EXAMPLE_API_KEY}
     # For development with auto-reload capabilities
-    command: python -m teoka.main --reload
+    command: python -m tekoa.main --reload
     profiles:
       - dev
 
@@ -55,7 +55,7 @@ services:
       # Add your environment variables below
       - EXAMPLE_API_KEY=${EXAMPLE_API_KEY}
     # Example CLI command - modify according to your application
-    command: python -m teoka.cli
+    command: python -m tekoa.cli
     profiles:
       - cli
 

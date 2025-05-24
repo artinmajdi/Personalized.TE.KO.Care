@@ -62,7 +62,7 @@ def main():
 
     # If dashboard flag is set, launch the Streamlit dashboard
     if args.dashboard:
-        from teoka.cli import run_dashboard
+        from tekoa.cli import run_dashboard
 
         class DashboardArgs:
             port = args.port
@@ -82,7 +82,7 @@ def main():
 
         # Your configuration loading code here
         # For example:
-        # from teoka.configurations.config_loader import ConfigLoader
+        # from tekoa.configurations.config_loader import ConfigLoader
         # config = ConfigLoader().load(config_path)
 
         logger.info("Application initialized successfully")
@@ -95,7 +95,7 @@ def main():
         logger.info("TE-KOA-C application running. Press Ctrl+C to exit.")
 
         # Import and initialize necessary components
-        from teoka.io.data_loader import DataLoader
+        from tekoa.io.data_loader import DataLoader
 
         # Example placeholder for a long-running process:
         import time

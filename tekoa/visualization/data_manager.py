@@ -515,7 +515,7 @@ class DataManager:
         if export_format == "csv":
             # Export to CSV
             csv = st.session_state.processed_data.to_csv(index=False)
-            filename = "teoka_processed_data.csv"
+            filename = "tekoa_processed_data.csv"
 
             return csv, filename, "csv"
 
@@ -539,7 +539,7 @@ class DataManager:
 
                     metadata.to_excel(writer, sheet_name='Pipeline Metadata', index=False)
 
-            filename = "teoka_processed_data.xlsx"
+            filename = "tekoa_processed_data.xlsx"
             return buffer.getvalue(), filename, "excel"
 
     def export_metadata(self):
@@ -563,7 +563,7 @@ class DataManager:
 
         # Convert pipeline results
         json_results = json.dumps(convert_for_json(st.session_state.pipeline_results), indent=2)
-        filename = "teoka_pipeline_metadata.json"
+        filename = "tekoa_pipeline_metadata.json"
 
         return json_results, filename, "json"
 
@@ -682,5 +682,5 @@ class DataManager:
             desc = st.session_state.processed_data.describe().to_markdown()
             report += desc + "\n\n"
 
-        filename = "teoka_pipeline_report.md"
+        filename = "tekoa_pipeline_report.md"
         return report, filename, "markdown"
