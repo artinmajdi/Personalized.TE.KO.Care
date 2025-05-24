@@ -4,7 +4,7 @@ Script to analyze the dictionary sheet of the TE-KOA-C dataset.
 
 import pandas as pd
 from pathlib import Path
-from tekoa import logger
+from tekoa.configuration import logger
 
 def analyze_dictionary(file_path):
     """

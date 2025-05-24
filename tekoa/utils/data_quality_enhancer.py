@@ -17,7 +17,7 @@ from scipy import stats
 from sklearn.preprocessing import StandardScaler, PowerTransformer, RobustScaler
 from sklearn.impute import KNNImputer
 
-from tekoa import logger
+from tekoa.configuration import logger
 
 
 class DataQualityEnhancer:

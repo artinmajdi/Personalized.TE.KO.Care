@@ -15,7 +15,7 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
-from tekoa import logger
+from tekoa.configuration import logger
 
 
 class VariableScreener:

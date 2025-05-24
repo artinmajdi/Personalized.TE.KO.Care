@@ -12,7 +12,7 @@ import time
 import json
 from typing import Dict, List, Optional, Tuple, Any, Union
 
-from tekoa import logger
+from tekoa.configuration import logger
 from tekoa.io import DataLoader
 from tekoa.utils import (
     VariableScreener,
