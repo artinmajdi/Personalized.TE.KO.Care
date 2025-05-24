@@ -9,24 +9,18 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.express as px
-import plotly.graph_objects as go
-import seaborn as sns
-import io
-import base64
-from pathlib import Path
-import time
-import logging
-from typing import Dict, List, Optional, Tuple, Any, Union
 from wordcloud import WordCloud
 from scipy import stats as scipy_stats
 
-from te_koa.visualization.app_refactored_claude_components.data_manager import DataManager
-from te_koa.visualization.app_refactored_claude_components.ui_utils import (
-    COLOR_PALETTE, TREATMENT_COLORS, create_download_link,
+from tekoa import logger
+from tekoa.visualization.data_manager import DataManager
+from tekoa.visualization.ui_utils import (
+    COLOR_PALETTE,
+    TREATMENT_COLORS,
+    create_download_link,
     plot_correlation_network
 )
 
-logger = logging.getLogger(__name__)
 
 class HeaderComponent:
     """Header component for the dashboard."""
@@ -34,7 +28,7 @@ class HeaderComponent:
     @staticmethod
     def render(data_manager: DataManager):
         """Render the dashboard header."""
-        st.image("https://www.nursing.arizona.edu/sites/default/files/styles/max_width_full/public/2023-04/tc%20banner%20home%20hero.png?itok=nJQD6jVY", use_container_width=True)
+        # st.image("https://www.nursing.arizona.edu/sites/default/files/styles/max_width_full/public/2023-04/tc%20banner%20home%20hero.png?itok=nJQD6jVY", use_container_width=True)
 
         # Check data status and display indicator
         data_loaded = data_manager.data is not None
@@ -1721,6 +1715,12 @@ class DimensionalityPage:
         # Initialize dimensionality reducer
         data_manager.initialize_dimensionality_reducer()
 
+        # Initialize session state for dimensionality reduction results if not exists
+        if 'pca_results' not in st.session_state:
+            st.session_state.pca_results = None
+        if 'famd_results' not in st.session_state:
+            st.session_state.famd_results = None
+
         # Tab navigation for dimensionality reduction
         tabs = st.tabs(["PCA Analysis", "FAMD Analysis", "Component Interpretation", "Transformed Data"])
 
@@ -1787,11 +1787,17 @@ class DimensionalityPage:
                     with st.spinner("Performing PCA..."):
                         # Run PCA
                         pca_results = data_manager.perform_dimensionality_reduction(
-                            method='pca',
-                            variables=selected_vars,
-                            n_components=n_components,
-                            standardize=standardize
+                            method       = 'pca',
+                            variables    = selected_vars,
+                            n_components = n_components,
+                            standardize  = standardize
                         )
+                        # Store PCA results in session state
+                        st.session_state.pca_results = {
+                            'selected_vars' : selected_vars,
+                            'n_components'  : n_components,
+                            'standardize'   : standardize
+                        }
 
                         # Display results
                         st.success(f"PCA successfully performed with {n_components} components!")
@@ -1799,7 +1805,9 @@ class DimensionalityPage:
                         # Scree plot
                         st.subheader("Scree Plot")
                         fig, _ = data_manager.dimensionality_reducer.plot_scree(method='pca')
-                        st.pyplot(fig)
+                        if fig is not None:
+                            st.pyplot(fig)
+                            plt.close(fig)  # Close the figure to free memory
 
                         # Get optimal number of components
                         variance_threshold = 0.75  # 75% explained variance
@@ -1824,7 +1832,9 @@ class DimensionalityPage:
                         # Biplot for first two components
                         st.subheader("PCA Biplot (First Two Components)")
                         fig, _ = data_manager.dimensionality_reducer.plot_biplot(pc1=1, pc2=2, method='pca')
-                        st.pyplot(fig)
+                        if fig is not None:
+                            st.pyplot(fig)
+                            plt.close(fig)  # Close the figure to free memory
             else:
                 st.warning("Please select variables for PCA.")
 
@@ -1878,6 +1888,11 @@ class DimensionalityPage:
                                     variables=variables,
                                     n_components=n_components
                                 )
+                                # Store FAMD results in session state
+                                st.session_state.famd_results = {
+                                    'selected_vars': variables,
+                                    'n_components': n_components
+                                }
 
                                 # Display results
                                 st.success(f"FAMD successfully performed with {n_components} components!")
@@ -1885,7 +1900,9 @@ class DimensionalityPage:
                                 # Scree plot
                                 st.subheader("Scree Plot")
                                 fig, _ = data_manager.dimensionality_reducer.plot_scree(method='famd')
-                                st.pyplot(fig)
+                                if fig is not None:
+                                    st.pyplot(fig)
+                                    plt.close(fig)  # Close the figure to free memory
 
                                 # Get optimal number of components
                                 optimal_components = data_manager.dimensionality_reducer.get_optimal_components(
@@ -1893,8 +1910,7 @@ class DimensionalityPage:
                                     variance_threshold=variance_threshold
                                 )
 
-                                st.markdown(f"**Optimal number of components:** {optimal_components} "
-                                          f"(explaining {variance_threshold*100:.0f}% of variance)")
+                                st.markdown(f"**Optimal number of components:** {optimal_components} (explaining {variance_threshold*100:.0f}% of variance)")
 
                                 # Variance explained table
                                 variance_df = data_manager.dimensionality_reducer.get_variance_explained(method='famd')
@@ -1950,10 +1966,33 @@ class DimensionalityPage:
                 # Check if method results are available
                 method_results_available = False
 
-                if method == "pca" and hasattr(data_manager.dimensionality_reducer, 'pca_results') and data_manager.dimensionality_reducer.pca_results:
-                    method_results_available = True
-                elif method == "famd" and hasattr(data_manager.dimensionality_reducer, 'famd_results') and data_manager.dimensionality_reducer.famd_results:
-                    method_results_available = True
+                # For PCA, check both session state and reducer
+                if method == "pca":
+                    if hasattr(data_manager.dimensionality_reducer, 'pca_results') and data_manager.dimensionality_reducer.pca_results:
+                        method_results_available = True
+                    elif st.session_state.pca_results:
+                        # Restore PCA results from session state
+                        pca_params = st.session_state.pca_results
+                        pca_results = data_manager.perform_dimensionality_reduction(
+                            method='pca',
+                            variables=pca_params['selected_vars'],
+                            n_components=pca_params['n_components'],
+                            standardize=pca_params['standardize']
+                        )
+                        method_results_available = True
+                # For FAMD, check both session state and reducer
+                elif method == "famd":
+                    if hasattr(data_manager.dimensionality_reducer, 'famd_results') and data_manager.dimensionality_reducer.famd_results:
+                        method_results_available = True
+                    elif st.session_state.famd_results:
+                        # Restore FAMD results from session state
+                        famd_params = st.session_state.famd_results
+                        famd_results = data_manager.perform_dimensionality_reduction(
+                            method='famd',
+                            variables=famd_params['selected_vars'],
+                            n_components=famd_params['n_components']
+                        )
+                        method_results_available = True
 
                 if method_results_available:
                     # Number of variables to show in loading plot

@@ -11,13 +11,15 @@ implementing all Phase I components including:
 - Treatment group analysis
 """
 
-import logging
 import streamlit as st
-from typing import Optional
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 
-from te_koa.visualization.app_refactored_claude_components.data_manager import DataManager
-from te_koa.visualization.app_refactored_claude_components.ui_utils import apply_custom_css
-from te_koa.visualization.app_refactored_claude_components.pages import (
+from tekoa import logger
+
+from tekoa.visualization.data_manager import DataManager
+from tekoa.visualization.ui_utils import apply_custom_css
+from tekoa.visualization.pages import (
     HeaderComponent,
     SidebarComponent,
     OverviewPage,
@@ -31,21 +33,15 @@ from te_koa.visualization.app_refactored_claude_components.pages import (
     PipelinePage
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
 class Dashboard:
     """Enhanced dashboard for the TE-KOA-C clinical research dataset."""
 
     def __init__(self):
         """Initialize the TE-KOA dashboard component."""
+        logger.info("Initializing Dashboard...")
         self.data_manager = DataManager()
 
-    def render(self):
+    def run(self):
         """Render the TE-KOA-C dashboard."""
         # Set page config
         st.set_page_config(
@@ -58,13 +54,11 @@ class Dashboard:
         # Apply custom CSS
         apply_custom_css()
 
-        # Display header
-        HeaderComponent.render(self.data_manager)
-
-        # Sidebar navigation
+        # Sidebar navigation (handles upload UI and triggers reruns for loading)
         SidebarComponent.render(self.data_manager)
 
         # Load data if not already loaded AND an uploaded file is available in session state
+        # This block loads data based on st.session_state.uploaded_file set by SidebarComponent
         if self.data_manager.data is None or self.data_manager.dictionary is None:
             uploaded_file_in_session = st.session_state.get('uploaded_file')
 
@@ -77,26 +71,29 @@ class Dashboard:
                             f"Failed to load the uploaded dataset: {uploaded_file_in_session.name}. "
                             "Please ensure it's a valid Excel file with 'Sheet1' for data and 'dictionary' for the data dictionary."
                         )
-                        # Consider stopping or allowing user to upload a new file.
-                        # For now, st.stop() prevents further rendering errors if pages expect data.
+                        # Render header even on failure, to show the 'X' status, then stop.
+                        HeaderComponent.render(self.data_manager)
                         st.stop()
                     else:
                         st.success(f"Successfully loaded dataset from: {uploaded_file_in_session.name}")
             # else:
                 # No data loaded and no file has been uploaded yet.
-                # The sidebar component (SidebarComponent.render above) already provides
-                # the UI for uploading. Individual pages should handle the 'no data' state gracefully
-                # or display prompts if they are active and data is missing.
-                # Example: if st.session_state.get('current_page', 'Overview') == 'Overview':
-                # st.info("Welcome! Please upload an Excel dataset using the sidebar to begin analysis.")
-                pass # Allow app to render; sidebar will show upload options.
+                # The sidebar component already provides the UI for uploading.
+                # Header will be rendered next, reflecting no data.
+                pass
+
+        # Display header (data_manager.data should be up-to-date for this run)
+        HeaderComponent.render(self.data_manager)
 
         # Get current page from session state
         current_page = st.session_state.get('current_page', 'Overview')
 
+        # If data is still None (e.g., no file uploaded, or initial state and no default data loaded)
         if self.data_manager.data is None:
+            # HeaderComponent has already rendered, showing 'Data Loaded: X'
+            # Display info message and stop further page rendering for this run.
             st.info("Welcome! Please upload an Excel dataset using the sidebar to begin analysis.")
-            return
+            return # Stop rendering pages if no data
 
         # Render current page
         if current_page == 'Overview':
@@ -133,7 +130,7 @@ class Dashboard:
 def main():
     """Main entry point for the TE-KOA dashboard."""
     dashboard = Dashboard()
-    dashboard.render()
+    dashboard.run()
 
 
 if __name__ == "__main__":

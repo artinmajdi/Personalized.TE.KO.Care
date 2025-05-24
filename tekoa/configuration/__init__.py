@@ -6,16 +6,10 @@ settings handling for the TE-KOA dataset analysis.
 """
 
 # Import all classes from params module
-from .params import (
-    DatasetNames,
-    EnumWithHelpers,
-)
+from .params import DatasetNames, EnumWithHelpers
 
 # Import settings classes
-from .settings import (
-    ConfigManager,
-    Settings,
-)
+from .settings import ConfigManager, Settings
 
 __all__ = [
     # Enums and parameter classes

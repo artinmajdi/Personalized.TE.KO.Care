@@ -5,22 +5,23 @@ This module provides a central manager for loading, processing, and managing dat
 for the TE-KOA dashboard.
 """
 
-import logging
 import pandas as pd
 import numpy as np
 import streamlit as st
 import time
 import json
 from typing import Dict, List, Optional, Tuple, Any, Union
-from pathlib import Path
 
-from te_koa.io.data_loader import DataLoader
-from te_koa.utils.variable_screener import VariableScreener
-from te_koa.utils.dimensionality_reducer import DimensionalityReducer
-from te_koa.utils.data_quality_enhancer import DataQualityEnhancer
-from te_koa.configurations.params import DatasetNames
+from tekoa import logger
+from tekoa.io import DataLoader
+from tekoa.utils import (
+    VariableScreener,
+    DimensionalityReducer,
+    DataQualityEnhancer,
+)
+from tekoa.configuration.params import DatasetNames
 
-logger = logging.getLogger(__name__)
+
 
 class DataManager:
     """Manager for TE-KOA data loading, processing, and state management."""
@@ -28,7 +29,7 @@ class DataManager:
     def __init__(self):
         """Initialize the data manager."""
         self.data_loader: Optional[DataLoader] = None
-        self.dataset_name = DatasetNames.TE_KOA.value
+        self.dataset_name = DatasetNames.TEKOA.value
         self.data = None
         self.dictionary = None
         self.imputed_data = None
@@ -60,7 +61,7 @@ class DataManager:
 
         Args:
             uploaded_file_obj: The uploaded file object (e.g., from Streamlit's file_uploader).
-                               If None, loading will fail.
+                                If None, loading will fail.
 
         Returns:
             bool: True if data loaded successfully, False otherwise.
@@ -200,8 +201,7 @@ class DataManager:
 
         return imputed_data
 
-    def screen_variables(self, near_zero_threshold: float, collinearity_threshold: float,
-                         vif_threshold: float, force_include: List[str]) -> Dict[str, Any]:
+    def screen_variables(self, near_zero_threshold: float, collinearity_threshold: float, vif_threshold: float, force_include: List[str]) -> Dict[str, Any]:
         """
         Screen variables for near-zero variance, collinearity, and VIF.
 
@@ -268,14 +268,12 @@ class DataManager:
         # Perform the reduction
         if method == 'pca':
             results = self.dimensionality_reducer.perform_pca(
-                variables=variables,
-                n_components=n_components,
-                standardize=standardize
+                variables    = variables,
+                n_components = n_components,
+                standardize  = standardize
             )
         elif method == 'famd':
-            results = self.dimensionality_reducer.perform_famd(
-                n_components=n_components
-            )
+            results = self.dimensionality_reducer.perform_famd( n_components=n_components )
         else:
             raise ValueError(f"Unknown dimensionality reduction method: {method}")
 

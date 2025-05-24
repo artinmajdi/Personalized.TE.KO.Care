@@ -8,7 +8,6 @@ This module provides functionality for data quality assessment and enhancement i
 - Data standardization
 """
 
-import logging
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
@@ -18,7 +17,7 @@ from scipy import stats
 from sklearn.preprocessing import StandardScaler, PowerTransformer, RobustScaler
 from sklearn.impute import KNNImputer
 
-logger = logging.getLogger(__name__)
+from tekoa import logger
 
 
 class DataQualityEnhancer:

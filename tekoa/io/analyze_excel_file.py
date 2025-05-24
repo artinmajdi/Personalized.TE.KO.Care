@@ -4,6 +4,7 @@ Script to analyze the TE-KOA-C dataset and print its structure.
 
 import pandas as pd
 from pathlib import Path
+from tekoa import logger
 
 def analyze_excel_file(file_path):
     """

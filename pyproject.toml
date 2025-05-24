@@ -3,8 +3,8 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name        = "te_koa"
-version     = "0.1.0"
+name        = "tekoa"
+version     = "0.4.5"
 description = "A data science and machine learning framework for nursing research"
 readme      = "README.md"
 authors     = [ {name = "Artin Majdi", email = "msm2024@gmail.com"} ]
@@ -21,26 +21,49 @@ classifiers = [
 ]
 keywords = ["nursing research", "healthcare", "AI", "medical analysis"]
 requires-python = ">=3.10"
-dynamic = ["dependencies"]
+dependencies = [
+    "altair",
+    "colorcet",
+    "matplotlib",
+    "networkx",
+    "numpy",
+    "openpyxl",
+    "pandas",
+    "pillow",
+    "plotly",
+    "prince",
+    "protobuf",
+    "pydantic",
+    "pytest",
+    "pytest-mock",
+    "python-dotenv",
+    "rich",
+    "sacremoses",
+    "scikit-learn",
+    "scipy",
+    "seaborn",
+    "shap",
+    "statsmodels",
+    "streamlit",
+    "watchdog",
+    "wordcloud",
+]
 
 [project.urls]
-Homepage      = "https://github.com/artinmajdi/te_koa"
-Documentation = "https://github.com/artinmajdi/te_koa/docs"
-Repository    = "https://github.com/artinmajdi/te_koa.git"
-Issues        = "https://github.com/artinmajdi/te_koa/issues"
+Homepage      = "https://github.com/artinmajdi/tekoa"
+Documentation = "https://github.com/artinmajdi/tekoa/docs"
+Repository    = "https://github.com/artinmajdi/tekoa.git"
+Issues        = "https://github.com/artinmajdi/tekoa/issues"
 
 [project.scripts]
-te_koa = "te_koa.main:main"
-te_koa-dashboard = "te_koa.cli:run_dashboard"
+ui = "tekoa.cli:run_dashboard"
 
 [tool.setuptools]
-packages = ["te_koa"]
+packages = [
+    "tekoa",
+    "tekoa.visualization",
+    "tekoa.io",
+    "tekoa.utils",
+]
+
 include-package-data = true
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
-
-[tool.setuptools.package-data]
-te_koa = ["**/*.py"]
-
-

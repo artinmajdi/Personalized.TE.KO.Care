@@ -2,7 +2,7 @@
 
 [deploy]
 # Specify the main app file to run
-main_script = "te_koa/visualization/app.py"
+main_script = "tekoa/visualization/app.py"
 
 # Specify Python version for deployment
 python_version = "3.12"
@@ -24,8 +24,8 @@ ENVIRONMENT = "production"
 
 [resources]
 # Resource allocation for the app
-cpu = "2x"
-memory = "2GB"
+cpu = "4x"
+memory = "4GB"
 
 [health_check]
 # Health check settings

@@ -9,7 +9,12 @@ from .dimensionality_reducer import DimensionalityReducer
 from .data_quality_enhancer import DataQualityEnhancer
 
 __all__ = [
+    # Variable Screening
     'VariableScreener',
+
+    # Dimensionality Reduction
     'DimensionalityReducer',
-    'DataQualityEnhancer'
+
+    # Data Quality
+    'DataQualityEnhancer',
 ]

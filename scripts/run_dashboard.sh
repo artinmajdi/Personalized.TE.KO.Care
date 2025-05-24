@@ -54,11 +54,11 @@ case $choice in
 
         # Determine the application entry point
         APP_PATH="" # Initialize APP_PATH
-        VIS_DIR_RELATIVE="te_koa/visualization" # Relative path for messages
+        VIS_DIR_RELATIVE="tekoa/visualization" # Relative path for messages
         VIS_DIR_ABSOLUTE="$ROOT_DIR/$VIS_DIR_RELATIVE"
-        
+
         echo -e "${BLUE}Looking for application files (app*.py) in '$VIS_DIR_RELATIVE'...${NC}"
-        
+
         app_candidates_full_paths=()
         if [ -d "$VIS_DIR_ABSOLUTE" ]; then # Check if directory exists before find
             # Use find and process substitution to populate the array safely
@@ -78,7 +78,7 @@ case $choice in
         elif [ "$num_app_candidates" -gt 1 ]; then
             # Multiple candidates found, prompt user
             echo -e "${BLUE}Multiple application entry points found in '$VIS_DIR_RELATIVE'. Please choose one:${NC}"
-            
+
             # Prepare options for select (relative paths)
             options_relative_paths=()
             for full_path in "${app_candidates_full_paths[@]}"; do
@@ -108,14 +108,14 @@ case $choice in
         # Fallback logic: If APP_PATH is still empty (no suitable app in visualization dir or dir not found)
         if [ -z "$APP_PATH" ]; then
             echo -e "${BLUE}Attempting to find application in other common locations...${NC}"
-            if [ -f "$ROOT_DIR/te_koa/dashboard/app.py" ]; then
-                APP_PATH="te_koa/dashboard/app.py"
+            if [ -f "$ROOT_DIR/tekoa/dashboard/app.py" ]; then
+                APP_PATH="tekoa/dashboard/app.py"
                 echo -e "${GREEN}Found application: $APP_PATH${NC}"
-            elif [ -f "$ROOT_DIR/te_koa/app.py" ]; then
-                APP_PATH="te_koa/app.py"
+            elif [ -f "$ROOT_DIR/tekoa/app.py" ]; then
+                APP_PATH="tekoa/app.py"
                 echo -e "${GREEN}Found application: $APP_PATH${NC}"
-            elif [ -f "$ROOT_DIR/te_koa/main.py" ]; then
-                APP_PATH="te_koa/main.py"
+            elif [ -f "$ROOT_DIR/tekoa/main.py" ]; then
+                APP_PATH="tekoa/main.py"
                 echo -e "${GREEN}Found application: $APP_PATH${NC}"
             else
                 # No app found by any automatic method, prompt user
@@ -136,7 +136,7 @@ case $choice in
                 done
             fi
         fi
-        
+
         # Final check: Ensure APP_PATH is set (should be handled by user prompt loop if all else fails)
         if [ -z "$APP_PATH" ]; then
             echo -e "${RED}Critical Error: Application entry point could not be determined even after user prompt. Exiting.${NC}"
