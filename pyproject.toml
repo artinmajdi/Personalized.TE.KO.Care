@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name        = "tekoa"
-version     = "0.4.5"
+version     = "0.5.1"
 description = "A data science and machine learning framework for nursing research"
 readme      = "README.md"
 authors     = [ {name = "Artin Majdi", email = "msm2024@gmail.com"} ]
@@ -50,10 +50,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/artinmajdi/tekoa"
-Documentation = "https://github.com/artinmajdi/tekoa/docs"
-Repository    = "https://github.com/artinmajdi/tekoa.git"
-Issues        = "https://github.com/artinmajdi/tekoa/issues"
+Homepage      = "https://github.com/artinmajdi/Personalized.TE.KO.Care"
+Documentation = "https://github.com/artinmajdi/Personalized.TE.KO.Care/docs"
+Repository    = "https://github.com/artinmajdi/Personalized.TE.KO.Care.git"
+Issues        = "https://github.com/artinmajdi/Personalized.TE.KO.Care/issues"
 
 [project.scripts]
 ui = "tekoa.cli:run_dashboard"

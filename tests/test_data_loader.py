@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.io.data_loader import DataLoader
+from tekoa.io.data_loader import DataLoader
 
 
 class TestDataLoader(TestCase):

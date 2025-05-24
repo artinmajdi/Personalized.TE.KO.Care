@@ -373,9 +373,9 @@ if [ "$ENV_TYPE" = "docker" ]; then
 else
     echo -e "\n${BLUE}To run the application, activate your environment and run:${NC}"
     if [ -f "$PROJECT_ROOT/setup.py" ]; then
-        echo -e "${GREEN}    python -m src.main${NC}\n"
+        echo -e "${GREEN}    python -m teoka.main${NC}\n"
     else
-        echo -e "${GREEN}    python src/main.py${NC}\n"
+        echo -e "${GREEN}    python teoka/main.py${NC}\n"
     fi
 fi
 

@@ -11,17 +11,17 @@ include setup_config/requirements.txt
 include setup_config/pytest.ini
 
 # Include configuration files
-include src/utils/config.yaml
+include teoka/utils/config.yaml
 include setup_config/.env.example
 
 # Include documentation
 recursive-include docs *
 
 # Include package data
-recursive-include src *.py
-recursive-include src *.yaml
-recursive-include src *.json
-recursive-include src *.txt
+recursive-include teoka *.py
+recursive-include teoka *.yaml
+recursive-include teoka *.json
+recursive-include teoka *.txt
 
 # Exclude compiled python files
 global-exclude *.py[cod]
