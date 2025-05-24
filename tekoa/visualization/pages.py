@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 from wordcloud import WordCloud
 from scipy import stats as scipy_stats
+from typing import Tuple, Dict, List, Union
+
 
 from tekoa import logger
 from tekoa.visualization.data_manager import DataManager
@@ -146,7 +148,7 @@ class SidebarComponent:
                 st.session_state.current_page = 'Auto-Phenotyping'
                 st.rerun()
 
-            if st.button("探索 Phenotype Explorer", use_container_width=True):
+            if st.button("Phenotype Explorer", use_container_width=True):
                 st.session_state.current_page = 'Phenotype Explorer'
                 st.rerun()
 
@@ -3769,7 +3771,7 @@ class PhenotypeExplorerPage:
     def _create_radar_chart(data_dict: Dict[str, float], title: str) -> Figure:
         """Helper to create a Plotly radar chart."""
         categories = list(data_dict.keys())
-        values = list(data_dict.values())
+        values     = list(data_dict.values())
 
         fig = Figure()
         fig.add_trace(Scatterpolar(
@@ -3789,6 +3791,7 @@ class PhenotypeExplorerPage:
     @staticmethod
     def render(data_manager: DataManager):
         """Render the phenotype explorer page."""
+
         st.header("Phenotype Explorer")
 
         if 'phenotyping_results' not in st.session_state or not st.session_state.phenotyping_results:
@@ -3799,14 +3802,14 @@ class PhenotypeExplorerPage:
             return
 
         phenotyping_results = st.session_state.phenotyping_results
-        n_clusters = phenotyping_results.get('n_clusters')
-        cluster_labels = phenotyping_results.get('cluster_labels')
-        processed_data = data_manager.get_data() # Get the data used for clustering
+        n_clusters          = phenotyping_results.get('n_clusters')
+        cluster_labels      = phenotyping_results.get('cluster_labels')
+        processed_data      = data_manager.get_data() # Get the data used for clustering
 
         if processed_data is None or cluster_labels is None:
             st.error("Processed data or cluster labels are missing from phenotyping results.")
             return
-        
+
         # Ensure 'cluster_labels' is added to the processed_data for easy filtering
         # Make a copy to avoid modifying the original session state data if it's directly from there
         data_with_clusters = processed_data.copy()
@@ -3817,10 +3820,11 @@ class PhenotypeExplorerPage:
         # --- Phenotype Selection and Naming ---
         st.sidebar.subheader("Phenotype Selection")
         available_phenotypes = sorted(list(np.unique(cluster_labels)))
+
         selected_phenotype_id = st.sidebar.selectbox(
-            "Select Phenotype (Cluster ID)",
-            options=available_phenotypes,
-            format_func=lambda x: data_manager.get_phenotype_name(x) # Show custom name if available
+            label       = "Select Phenotype (Cluster ID)",
+            options     = available_phenotypes,
+            format_func = lambda x: data_manager.get_phenotype_name(x) # Show custom name if available
         )
 
         if selected_phenotype_id is not None:
@@ -3828,17 +3832,20 @@ class PhenotypeExplorerPage:
             st.sidebar.markdown(f"#### Currently Viewing: {current_name}")
 
             new_name = st.sidebar.text_input("Edit Phenotype Name", value=current_name)
+
             if st.sidebar.button("Save Name", key=f"save_name_{selected_phenotype_id}"):
                 if new_name and new_name.strip():
+
                     data_manager.save_phenotype_name(selected_phenotype_id, new_name.strip())
                     st.sidebar.success(f"Name for Phenotype {selected_phenotype_id} saved as '{new_name.strip()}'.")
                     st.rerun() # Rerun to update selectbox format_func
+
                 else:
                     st.sidebar.error("Phenotype name cannot be empty.")
 
             # --- Radar Chart for Selected Phenotype ---
             st.subheader(f"Radar Chart: {data_manager.get_phenotype_name(selected_phenotype_id)}")
-            
+
             # Select features for radar chart - use all numeric features by default
             numeric_cols = processed_data.select_dtypes(include=np.number).columns.tolist()
             if not numeric_cols:
@@ -3848,9 +3855,9 @@ class PhenotypeExplorerPage:
                 # Here, we'll use MinMaxScaler on the means for visualization purposes.
                 # A more robust approach would be to scale features before calculating means.
                 radar_data_raw = data_manager.get_phenotype_radar_chart_data(
-                    phenotype_id=selected_phenotype_id,
-                    processed_data_with_clusters=data_with_clusters,
-                    features=numeric_cols # Use all numeric features
+                    phenotype_id                 = selected_phenotype_id,
+                    processed_data_with_clusters = data_with_clusters,
+                    features                     = numeric_cols # Use all numeric features
                 )
 
                 if radar_data_raw:
@@ -3858,7 +3865,7 @@ class PhenotypeExplorerPage:
                     scaler = MinMaxScaler()
                     # Fit scaler on all phenotype means to maintain relative differences if comparing
                     # For simplicity here, just scaling current phenotype's means
-                    scaled_values = scaler.fit_transform(np.array(list(radar_data_raw.values())).reshape(-1, 1)).flatten()
+                    scaled_values     = scaler.fit_transform(np.array(list(radar_data_raw.values())).reshape(-1, 1)).flatten()
                     radar_data_scaled = dict(zip(radar_data_raw.keys(), scaled_values))
 
                     try:
@@ -3877,8 +3884,8 @@ class PhenotypeExplorerPage:
             st.subheader(f"Patients in {data_manager.get_phenotype_name(selected_phenotype_id)}")
             with st.expander("View Patient List"):
                 patients_df = data_manager.get_patients_for_phenotype(
-                    phenotype_id=selected_phenotype_id,
-                    processed_data_with_clusters=data_with_clusters
+                    phenotype_id                 = selected_phenotype_id,
+                    processed_data_with_clusters = data_with_clusters
                 )
                 if patients_df is not None and not patients_df.empty:
                     st.dataframe(patients_df)
@@ -3937,7 +3944,7 @@ class PhenotypeExplorerPage:
                         st.plotly_chart(radar_fig_p2, use_container_width=True)
                     else:
                         st.info(f"Could not generate radar data for {name_p2}.")
-                
+
                 # Comparative table (simple version)
                 if radar_data_p1_raw and radar_data_p2_raw:
                     comp_df = pd.DataFrame({'Feature': list(radar_data_p1_raw.keys()),
@@ -3972,11 +3979,13 @@ class ValidationDashboardPage:
     @staticmethod
     def render(data_manager: DataManager):
         """Render the validation dashboard page."""
+
         st.header("Phenotype Validation Dashboard")
         ValidationDashboardPage._initialize_checklist_state()
 
         if 'phenotyping_results' not in st.session_state or not st.session_state.phenotyping_results:
             st.warning("Phenotyping has not been performed yet. Please go to the 'Auto-Phenotyping' page first.")
+
             if st.button("Go to Auto-Phenotyping"):
                 st.session_state.current_page = 'Auto-Phenotyping'
                 st.rerun()
@@ -3984,10 +3993,7 @@ class ValidationDashboardPage:
 
         phenotyping_results = st.session_state.phenotyping_results
 
-        st.markdown("""
-        This dashboard helps assess the quality and reliability of the identified patient phenotypes.
-        It includes stability metrics and a checklist for clinical meaningfulness.
-        """)
+        st.markdown(""" This dashboard helps assess the quality and reliability of the identified patient phenotypes. It includes stability metrics and a checklist for clinical meaningfulness. """)
 
         # --- Stability Meter/Metrics ---
         st.subheader("Phenotype Stability Assessment")
@@ -4001,7 +4007,7 @@ class ValidationDashboardPage:
                     st.success("Stability metrics updated.")
                 else:
                     st.error("Could not retrieve stability data.")
-        
+
         if 'stability_data' in st.session_state and st.session_state.stability_data:
             stability_data = st.session_state.stability_data
             avg_jaccard = stability_data.get('avg_jaccard_score', 0)
@@ -4017,7 +4023,7 @@ class ValidationDashboardPage:
             - **0.6 - 0.75:** Moderately stable
             - **< 0.6:** Unstable
             """)
-            
+
             # Visual Gauge (simple version using st.progress or st.metric)
             # A more sophisticated gauge would require a custom component or Plotly.
             if avg_jaccard >= 0.85:
@@ -4038,22 +4044,24 @@ class ValidationDashboardPage:
             if 'silhouette_bootstrap_distributions' in stability_data:
                 st.markdown("#### Silhouette Score Distributions (Bootstrap)")
                 st.markdown("Distribution of average silhouette scores from bootstrap runs for each original cluster.")
-                
+
                 # For simplicity, just showing overall average from bootstrap, not per-cluster plots yet
                 # This would be a good place for box plots per cluster if data is structured that way
                 all_bootstrap_sil_scores = []
                 for dist in stability_data['silhouette_bootstrap_distributions']:
                     all_bootstrap_sil_scores.extend(dist)
-                
+
                 if all_bootstrap_sil_scores:
-                    fig = px.histogram(pd.DataFrame({'Bootstrap Silhouette Scores': all_bootstrap_sil_scores}), 
-                                     x='Bootstrap Silhouette Scores', 
-                                     title='Overall Distribution of Bootstrap Silhouette Scores',
-                                     nbins=20)
+                    fig = px.histogram(pd.DataFrame({'Bootstrap Silhouette Scores': all_bootstrap_sil_scores}),
+                                    x='Bootstrap Silhouette Scores',
+                                    title='Overall Distribution of Bootstrap Silhouette Scores',
+                                    nbins=20)
                     original_avg_sil = phenotyping_results.get('silhouette_score', 0)
-                    fig.add_vline(x=original_avg_sil, line_dash="dash", line_color="red", 
-                                  annotation_text=f"Original Avg Silhouette: {original_avg_sil:.2f}")
+
+                    fig.add_vline(x=original_avg_sil, line_dash="dash", line_color="red", annotation_text=f"Original Avg Silhouette: {original_avg_sil:.2f}")
+
                     st.plotly_chart(fig, use_container_width=True)
+
                 else:
                     st.info("No silhouette bootstrap distribution data to display.")
         else:
@@ -4065,17 +4073,13 @@ class ValidationDashboardPage:
         st.markdown("Evaluate the practical relevance and interpretability of the identified phenotypes.")
 
         for item_key, item_props in st.session_state.validation_checklist.items():
-            st.session_state.validation_checklist[item_key]["checked"] = st.checkbox(
-                item_props["label"],
-                value=item_props["checked"],
-                key=f"chk_{item_key}"
-            )
-        
+            st.session_state.validation_checklist[item_key]["checked"] = st.checkbox( item_props["label"], value=item_props["checked"], key=f"chk_{item_key}" )
+
         # Calculate completion
-        checked_items = sum(1 for item in st.session_state.validation_checklist.values() if item["checked"])
-        total_items = len(st.session_state.validation_checklist)
+        checked_items         = sum(1 for item in st.session_state.validation_checklist.values() if item["checked"])
+        total_items           = len(st.session_state.validation_checklist)
         completion_percentage = (checked_items / total_items) * 100
-        
+
         st.markdown("---")
         st.progress(int(completion_percentage))
         st.markdown(f"**Checklist Completion: {checked_items}/{total_items} ({completion_percentage:.0f}%)**")
@@ -4091,17 +4095,17 @@ class ValidationDashboardPage:
                 try:
                     # Mock report generation for now
                     report_data = {
-                        "phenotyping_summary": st.session_state.get('phenotyping_results'),
-                        "stability_summary": st.session_state.get('stability_data'),
+                        "phenotyping_summary" : st.session_state.get('phenotyping_results'),
+                        "stability_summary"   : st.session_state.get('stability_data'),
                         "validation_checklist": st.session_state.get('validation_checklist')
                     }
                     report_json = pd.io.json.dumps(report_data, indent=2) # Use pandas for better numpy handling
-                    
+
                     st.download_button(
-                        label="Download Phenotype Report (JSON)",
-                        data=report_json,
-                        file_name="phenotype_validation_report.json",
-                        mime="application/json"
+                        label     = "Download Phenotype Report (JSON)",
+                        data      = report_json,
+                        file_name = "phenotype_validation_report.json",
+                        mime      = "application/json"
                     )
                     st.success("Phenotype report (JSON) prepared for download.")
                 except Exception as e:
