@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 from sklearn.impute import KNNImputer
 from sklearn.preprocessing import StandardScaler
-from tekoa import logger
+from tekoa.configuration import logger
 
 
 DATASET_NAME = 'te_koa_R01_only_RCT_data.xlsx'

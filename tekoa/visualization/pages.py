@@ -12,7 +12,7 @@ import plotly.express as px
 from wordcloud import WordCloud
 from scipy import stats as scipy_stats
 
-from tekoa import logger
+from tekoa.configuration import logger
 from tekoa.visualization.data_manager import DataManager
 from tekoa.visualization.ui_utils import (
     COLOR_PALETTE,

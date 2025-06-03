@@ -9,7 +9,7 @@ settings handling for the TE-KOA dataset analysis.
 from .params import DatasetNames, EnumWithHelpers
 
 # Import settings classes
-from .settings import ConfigManager, Settings
+from .settings import ConfigManager, Settings, setup_logging, logger
 
 __all__ = [
     # Enums and parameter classes
@@ -19,4 +19,8 @@ __all__ = [
     # Settings classes
     'Settings',
     'ConfigManager',
+    
+    # Utility functions
+    'setup_logging',
+    'logger'
 ]

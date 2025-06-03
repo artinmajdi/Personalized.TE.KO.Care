@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import base64
 
-from tekoa import logger
+from tekoa.configuration import logger
 
 # Define app configuration
 APP_TITLE = "TE-KOA Clinical Research Dashboard"

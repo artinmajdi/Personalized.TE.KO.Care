@@ -15,7 +15,7 @@ import streamlit as st
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 
-from tekoa import logger
+from tekoa.configuration import logger
 
 from tekoa.visualization.data_manager import DataManager
 from tekoa.visualization.ui_utils import apply_custom_css
