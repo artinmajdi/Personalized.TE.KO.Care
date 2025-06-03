@@ -5,8 +5,7 @@ This module implements Phase II of the KOA analysis pipeline, providing
 clustering algorithms, validation metrics, and phenotype characterization.
 """
 
-import logging
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -20,7 +19,7 @@ from scipy.spatial.distance import cdist
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from tekoa import logger
+from tekoa.configuration import logger
 
 
 class PhenotypeDiscovery:

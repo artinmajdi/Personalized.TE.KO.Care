@@ -9,10 +9,7 @@ settings handling for the TE-KOA dataset analysis.
 from .params import DatasetNames, EnumWithHelpers
 
 # Import settings classes
-from .settings import ConfigManager, Settings
-
-# Configure logging
-from .settings import setup_logging, logger
+from .settings import ConfigManager, Settings, setup_logging, logger
 
 # Set up default logging when the package is imported
 setup_logging()
@@ -25,4 +22,7 @@ __all__ = [
     # Settings classes
     'Settings',
     'ConfigManager',
+    # Logging
+    'logger',
+    'setup_logging',
 ]
