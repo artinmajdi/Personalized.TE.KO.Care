@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import plotly.express as px
 
-from tekoa import logger
+from tekoa.configuration import logger
 from tekoa.visualization.data_manager import DataManager
 from tekoa.visualization.ui_utils import create_download_link
 
