@@ -110,7 +110,7 @@ class SidebarComponent:
                 st.session_state.current_page = 'Data Dictionary'
                 st.rerun()
 
-            st.markdown("#### Phase I Components")
+            st.markdown("#### Phase I: Data Preparation")
 
             if st.button("🧩 Missing Data & Imputation", use_container_width=True):
                 st.session_state.current_page = 'Missing Data & Imputation'
@@ -131,6 +131,22 @@ class SidebarComponent:
             if st.button("👥 Treatment Groups", use_container_width=True):
                 st.session_state.current_page = 'Treatment Groups'
                 st.rerun()
+
+            st.markdown("#### Phase II: Phenotype Discovery")
+
+            if st.button("🔍 Clustering Analysis", use_container_width=True):
+                st.session_state.current_page = 'Clustering Analysis'
+                st.rerun()
+
+            if st.button("✅ Cluster Validation", use_container_width=True):
+                st.session_state.current_page = 'Cluster Validation'
+                st.rerun()
+
+            if st.button("📊 Phenotype Characterization", use_container_width=True):
+                st.session_state.current_page = 'Phenotype Characterization'
+                st.rerun()
+
+            st.markdown("#### Export & Reports")
 
             if st.button("💾 Pipeline & Export", use_container_width=True):
                 st.session_state.current_page = 'Pipeline & Export'

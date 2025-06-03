@@ -19,6 +19,7 @@ from tekoa.utils import (
     DimensionalityReducer,
     DataQualityEnhancer,
 )
+from tekoa.utils.phenotype_discovery import PhenotypeDiscovery
 from tekoa.configuration.params import DatasetNames
 
 
@@ -40,6 +41,7 @@ class DataManager:
         self.variable_screener = None
         self.dimensionality_reducer = None
         self.data_quality_enhancer = None
+        self.phenotype_discovery = None
 
         # Initialize session state for data management
         self._initialize_session_state()
@@ -52,6 +54,8 @@ class DataManager:
             st.session_state.pipeline_results = {}
         if 'phenotypes' not in st.session_state:
             st.session_state.phenotypes = None
+        if 'phenotype_results' not in st.session_state:
+            st.session_state.phenotype_results = {}
         if 'current_page' not in st.session_state:
             st.session_state.current_page = 'Overview'
 
@@ -684,3 +688,191 @@ class DataManager:
 
         filename = "tekoa_pipeline_report.md"
         return report, filename, "markdown"
+
+    def initialize_phenotype_discovery(self, use_transformed_data: bool = False):
+        """Initialize the phenotype discovery module.
+
+        Args:
+            use_transformed_data: Whether to use dimensionality-reduced data
+        """
+        data_to_use = st.session_state.processed_data
+
+        # Check if we should use transformed data (e.g., FAMD components)
+        if use_transformed_data and 'dimensionality_reduction' in st.session_state.pipeline_results:
+            dim_results = st.session_state.pipeline_results['dimensionality_reduction']
+            if 'transformed_data_shape' in dim_results:
+                # Data has been transformed, use it
+                data_to_use = st.session_state.processed_data
+                logger.info("Using transformed data for phenotype discovery")
+            else:
+                logger.warning("Transformed data not available, using processed data")
+
+        if self.phenotype_discovery is None and data_to_use is not None:
+            self.phenotype_discovery = PhenotypeDiscovery(data_to_use)
+
+    def perform_clustering(self, method: str, n_clusters_range: range) -> Dict:
+        """Perform clustering using specified method.
+
+        Args:
+            method: Clustering method ('kmeans', 'agglomerative', 'gmm')
+            n_clusters_range: Range of cluster numbers to try
+
+        Returns:
+            Dictionary with clustering results
+        """
+        self.initialize_phenotype_discovery()
+
+        if method == 'kmeans':
+            results = self.phenotype_discovery.perform_kmeans(n_clusters_range)
+        elif method == 'agglomerative':
+            results = self.phenotype_discovery.perform_agglomerative(n_clusters_range)
+        elif method == 'gmm':
+            results = self.phenotype_discovery.perform_gmm(n_clusters_range)
+        else:
+            raise ValueError(f"Unknown clustering method: {method}")
+
+        # Store results in session state
+        if method not in st.session_state.phenotype_results:
+            st.session_state.phenotype_results[method] = {}
+        st.session_state.phenotype_results[method]['clustering'] = results
+
+        return results
+
+    def calculate_gap_statistic(self, method: str, n_clusters_range: range, n_references: int = 10) -> Dict:
+        """Calculate gap statistic for optimal cluster determination.
+
+        Args:
+            method: Clustering method
+            n_clusters_range: Range of cluster numbers
+            n_references: Number of reference datasets
+
+        Returns:
+            Dictionary with gap statistics
+        """
+        self.initialize_phenotype_discovery()
+
+        results = self.phenotype_discovery.calculate_gap_statistic(
+            method=method,
+            n_clusters_range=n_clusters_range,
+            n_references=n_references
+        )
+
+        # Store in session state
+        if method not in st.session_state.phenotype_results:
+            st.session_state.phenotype_results[method] = {}
+        st.session_state.phenotype_results[method]['gap_statistic'] = results
+
+        return results
+
+    def assess_bootstrap_stability(self, method: str, k: int, n_bootstrap: int = 100, subsample_size: float = 0.8) -> Dict:
+        """Assess clustering stability using bootstrap.
+
+        Args:
+            method: Clustering method
+            k: Number of clusters
+            n_bootstrap: Number of bootstrap samples
+            subsample_size: Proportion of data to subsample
+
+        Returns:
+            Dictionary with stability metrics
+        """
+        self.initialize_phenotype_discovery()
+
+        results = self.phenotype_discovery.bootstrap_stability(
+            method=method,
+            k=k,
+            n_bootstrap=n_bootstrap,
+            subsample_size=subsample_size
+        )
+
+        # Store in session state
+        if method not in st.session_state.phenotype_results:
+            st.session_state.phenotype_results[method] = {}
+        if 'stability' not in st.session_state.phenotype_results[method]:
+            st.session_state.phenotype_results[method]['stability'] = {}
+        st.session_state.phenotype_results[method]['stability'][k] = results
+
+        return results
+
+    def determine_optimal_clusters(self, min_cluster_size: int = 10) -> Dict:
+        """Determine optimal number of clusters.
+
+        Args:
+            min_cluster_size: Minimum samples per cluster
+
+        Returns:
+            Dictionary with recommendations
+        """
+        self.initialize_phenotype_discovery()
+
+        recommendations = self.phenotype_discovery.determine_optimal_clusters(min_cluster_size)
+
+        # Store in session state
+        st.session_state.phenotype_results['optimal_clusters'] = recommendations
+
+        return recommendations
+
+    def characterize_phenotypes(self, method: str, k: int = None) -> pd.DataFrame:
+        """Create statistical characterization of phenotypes.
+
+        Args:
+            method: Clustering method
+            k: Number of clusters
+
+        Returns:
+            DataFrame with phenotype characteristics
+        """
+        self.initialize_phenotype_discovery()
+
+        char_df = self.phenotype_discovery.characterize_phenotypes(method, k)
+
+        # Store in session state
+        if method not in st.session_state.phenotype_results:
+            st.session_state.phenotype_results[method] = {}
+        st.session_state.phenotype_results[method]['characterization'] = char_df
+
+        return char_df
+
+    def compare_phenotypes(self, method: str, k: int = None, variables: List[str] = None) -> Dict:
+        """Compare phenotypes statistically.
+
+        Args:
+            method: Clustering method
+            k: Number of clusters
+            variables: Variables to compare
+
+        Returns:
+            Dictionary with comparison results
+        """
+        self.initialize_phenotype_discovery()
+
+        comparison = self.phenotype_discovery.compare_phenotypes(method, k, variables)
+
+        # Store comparison results
+        self.phenotype_discovery.comparison_results = comparison
+
+        # Store in session state
+        if method not in st.session_state.phenotype_results:
+            st.session_state.phenotype_results[method] = {}
+        st.session_state.phenotype_results[method]['comparison'] = comparison
+
+        return comparison
+
+    def export_phenotype_assignments(self, method: str, k: int = None) -> pd.DataFrame:
+        """Export phenotype assignments.
+
+        Args:
+            method: Clustering method
+            k: Number of clusters
+
+        Returns:
+            DataFrame with phenotype assignments
+        """
+        self.initialize_phenotype_discovery()
+
+        phenotype_data = self.phenotype_discovery.export_phenotype_assignments(method, k)
+
+        # Store as current phenotypes
+        st.session_state.phenotypes = phenotype_data
+
+        return phenotype_data

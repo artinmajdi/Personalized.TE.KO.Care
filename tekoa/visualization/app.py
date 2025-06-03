@@ -33,6 +33,10 @@ from tekoa.visualization.pages import (
     PipelinePage
 )
 
+
+from tekoa.visualization.phase2_pages import ClusteringPage, ValidationPage, CharacterizationPage
+
+
 class Dashboard:
     """Enhanced dashboard for the TE-KOA-C clinical research dataset."""
 
@@ -119,6 +123,15 @@ class Dashboard:
 
         elif current_page == 'Treatment Groups':
             TreatmentGroupsPage.render(self.data_manager)
+
+        elif current_page == 'Clustering Analysis':
+            ClusteringPage.render(self.data_manager)
+
+        elif current_page == 'Cluster Validation':
+            ValidationPage.render(self.data_manager)
+
+        elif current_page == 'Phenotype Characterization':
+            CharacterizationPage.render(self.data_manager)
 
         elif current_page == 'Pipeline & Export':
             PipelinePage.render(self.data_manager)
