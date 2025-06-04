@@ -710,28 +710,44 @@ class DataManager:
         if self.phenotype_discovery is None and data_to_use is not None:
             self.phenotype_discovery = PhenotypeDiscovery(data_to_use)
 
-    def perform_clustering(self, method: str, n_clusters_range: range) -> Dict:
+    def perform_clustering(self, method: str, n_clusters_range: range, columns_to_use: Optional[List[str]] = None) -> Dict:
         """Perform clustering using specified method.
 
         Args:
             method: Clustering method ('kmeans', 'agglomerative', 'gmm')
             n_clusters_range: Range of cluster numbers to try
+            columns_to_use: Optional list of column names to use for clustering.
+                            If None, uses all available features or transformed components.
 
         Returns:
             Dictionary with clustering results
         """
-        self.initialize_phenotype_discovery()
+        # Ensure phenotype_discovery is initialized.
+        # The use_transformed_data flag in initialize_phenotype_discovery is handled by the UI page before calling this.
+        if self.phenotype_discovery is None:
+            # This should ideally be called from the page UI logic based on the checkbox
+            # For safety, we can call it here, but it might re-initialize with default if not set by UI
+            # Consider if initialize_phenotype_discovery needs to be aware of columns_to_use if not using transformed data.
+            # For now, assume initialize_phenotype_discovery has set up data_for_clustering correctly.
+            st.warning("PhenotypeDiscovery not initialized prior to perform_clustering. Attempting default initialization.")
+            self.initialize_phenotype_discovery(use_transformed_data=True) # Defaulting to true, UI should control this
+            if self.phenotype_discovery is None:
+                st.error("Failed to initialize PhenotypeDiscovery.")
+                return {}
 
         if method == 'kmeans':
-            results = self.phenotype_discovery.perform_kmeans(n_clusters_range)
+            results = self.phenotype_discovery.perform_kmeans(n_clusters_range, columns_to_use=columns_to_use)
         elif method == 'agglomerative':
-            results = self.phenotype_discovery.perform_agglomerative(n_clusters_range)
+            results = self.phenotype_discovery.perform_agglomerative(n_clusters_range, columns_to_use=columns_to_use)
         elif method == 'gmm':
-            results = self.phenotype_discovery.perform_gmm(n_clusters_range)
+            results = self.phenotype_discovery.perform_gmm(n_clusters_range, columns_to_use=columns_to_use)
         else:
+            st.error(f"Unknown clustering method: {method}")
             raise ValueError(f"Unknown clustering method: {method}")
 
         # Store results in session state
+        if 'phenotype_results' not in st.session_state:
+            st.session_state.phenotype_results = {}
         if method not in st.session_state.phenotype_results:
             st.session_state.phenotype_results[method] = {}
         st.session_state.phenotype_results[method]['clustering'] = results

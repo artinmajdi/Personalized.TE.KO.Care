@@ -109,6 +109,7 @@ class Dashboard:
         elif current_page == 'Data Dictionary':
             DictionaryPage.render(self.data_manager)
 
+        # Phase 1 pages -- Data Preparation & Dimensionality Reduction
         elif current_page == 'Missing Data & Imputation':
             MissingDataPage.render(self.data_manager)
 
@@ -124,6 +125,7 @@ class Dashboard:
         elif current_page == 'Treatment Groups':
             TreatmentGroupsPage.render(self.data_manager)
 
+        # Phase 2 pages -- Phenotype Discovery
         elif current_page == 'Clustering Analysis':
             ClusteringPage.render(self.data_manager)
 
@@ -133,6 +135,7 @@ class Dashboard:
         elif current_page == 'Phenotype Characterization':
             CharacterizationPage.render(self.data_manager)
 
+        # Pipeline & Export
         elif current_page == 'Pipeline & Export':
             PipelinePage.render(self.data_manager)
 

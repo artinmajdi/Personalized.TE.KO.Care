@@ -15,6 +15,7 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.mixture import GaussianMixture
 from sklearn.metrics import silhouette_score, calinski_harabasz_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
 from scipy import stats
 from scipy.spatial.distance import cdist
 import matplotlib.pyplot as plt
@@ -42,22 +43,62 @@ class PhenotypeDiscovery:
 
         # Prepare data for clustering
         self._prepare_data()
+        self.data_for_clustering = self.numeric_data
 
     def _prepare_data(self):
-        """Prepare data for clustering by handling mixed types and missing values."""
+        """Prepare data for clustering by handling mixed types, missing values, and problematic columns."""
+        if self.data is None or self.data.empty:
+            logger.error("Input data is None or empty. Cannot prepare data.")
+            self.numeric_data = pd.DataFrame()
+            self.scaled_data = pd.DataFrame()
+            self.data_for_clustering = pd.DataFrame() # Ensure this is also empty
+            return
+
         # Select only numeric columns for clustering
-        numeric_cols = self.data.select_dtypes(include=[np.number]).columns
-        self.numeric_data = self.data[numeric_cols].copy()
+        numeric_df = self.data.select_dtypes(include=[np.number]).copy()
+        logger.info(f"Initial numeric data: {numeric_df.shape[0]} rows, {numeric_df.shape[1]} columns.")
 
-        # Remove rows with any NaN values
-        original_rows = len(self.numeric_data)
-        self.numeric_data = self.numeric_data.dropna()
-        rows_after_nan_removal = len(self.numeric_data)
+        # 1. Remove columns that are entirely NaN
+        all_nan_cols = numeric_df.columns[numeric_df.isnull().all()].tolist()
+        if all_nan_cols:
+            numeric_df = numeric_df.drop(columns=all_nan_cols)
+            logger.info(f"Removed {len(all_nan_cols)} columns that were entirely NaN: {all_nan_cols}")
 
-        if original_rows != rows_after_nan_removal:
-            logger.info(f"Removed {original_rows - rows_after_nan_removal} rows with missing values")
+        if numeric_df.empty:
+            logger.warning("No numeric columns remaining after removing all-NaN columns.")
+            self.numeric_data = pd.DataFrame()
+            self.scaled_data = pd.DataFrame()
+            self.data_for_clustering = pd.DataFrame()
+            return
 
-        # Standardize the data
+        # 2. Impute remaining NaNs (e.g., with mean)
+        # Only impute if there are any NaNs to avoid unnecessary computation
+        if numeric_df.isnull().any().any():
+            imputer = SimpleImputer(strategy='mean')
+            numeric_df_imputed_values = imputer.fit_transform(numeric_df)
+            numeric_df = pd.DataFrame(numeric_df_imputed_values, columns=numeric_df.columns, index=numeric_df.index)
+            logger.info(f"Imputed missing values using 'mean' strategy. Data shape: {numeric_df.shape}")
+        else:
+            logger.info("No NaNs found in numeric data to impute.")
+
+        # 3. Remove columns with zero variance (or near zero variance if desired)
+        # These columns provide no information for clustering and can cause issues.
+        zero_var_cols = numeric_df.columns[numeric_df.nunique() == 1].tolist()
+        if zero_var_cols:
+            numeric_df = numeric_df.drop(columns=zero_var_cols)
+            logger.info(f"Removed {len(zero_var_cols)} columns with zero variance: {zero_var_cols}")
+        
+        if numeric_df.empty:
+            logger.warning("No numeric columns remaining after removing zero-variance columns.")
+            self.numeric_data = pd.DataFrame()
+            self.scaled_data = pd.DataFrame()
+            self.data_for_clustering = pd.DataFrame()
+            return
+
+        self.numeric_data = numeric_df # This is the cleaned, imputed, non-zero variance data
+        self.data_for_clustering = self.numeric_data # UI uses this for feature names
+
+        # 4. Standardize the data
         scaler = StandardScaler()
         self.scaled_data = pd.DataFrame(
             scaler.fit_transform(self.numeric_data),
@@ -65,9 +106,9 @@ class PhenotypeDiscovery:
             index=self.numeric_data.index
         )
 
-        logger.info(f"Prepared {len(self.numeric_data.columns)} numeric features for clustering with {len(self.numeric_data)} complete cases")
+        logger.info(f"Data preparation complete. Final features for clustering: {self.numeric_data.shape[1]}. Samples: {self.numeric_data.shape[0]}.")
 
-    def perform_kmeans(self, n_clusters_range: range = range(2, 7)) -> Dict:
+    def perform_kmeans(self, n_clusters_range: range = range(2, 7), columns_to_use: Optional[List[str]] = None) -> Dict:
         """
         Perform K-means clustering with multiple k values.
 
@@ -79,15 +120,47 @@ class PhenotypeDiscovery:
         """
         logger.info("Performing K-means clustering...")
 
+        data_for_clustering = self.scaled_data
+        if columns_to_use and isinstance(columns_to_use, list) and len(columns_to_use) > 0:
+
+            # Ensure all selected columns are present in scaled_data
+            valid_columns = [col for col in columns_to_use if col in self.scaled_data.columns]
+
+            if len(valid_columns) < len(columns_to_use):
+                missing_cols = set(columns_to_use) - set(valid_columns)
+                logger.warning(f"KMeans: Some selected columns were not found in scaled data and will be ignored: {missing_cols}")
+
+            if not valid_columns:
+                logger.error("KMeans: No valid columns selected for clustering after filtering. Aborting.")
+                return {}
+            data_for_clustering = self.scaled_data[valid_columns]
+            logger.info(f"KMeans: Using {len(valid_columns)} selected features for clustering: {', '.join(valid_columns[:5])}{'...' if len(valid_columns) > 5 else ''}")
+
+        elif columns_to_use is not None: # Empty list or invalid type
+            logger.warning("KMeans: 'columns_to_use' was provided but is empty or invalid. Using all available features.")
+
         results = {}
+        if data_for_clustering.empty or data_for_clustering.shape[1] == 0:
+            logger.error("KMeans: Data for clustering is empty or has no features. Aborting.")
+            return {}
+
         for k in n_clusters_range:
+            if data_for_clustering.shape[0] < k:
+                logger.warning(f"KMeans: Number of samples ({data_for_clustering.shape[0]}) is less than number of clusters ({k}). Skipping k={k}.")
+                continue
             # Fit K-means
             kmeans = KMeans(n_clusters=k, n_init=10, random_state=42)
-            labels = kmeans.fit_predict(self.scaled_data)
+            labels = kmeans.fit_predict(data_for_clustering)
 
             # Calculate metrics
-            silhouette = silhouette_score(self.scaled_data, labels)
-            calinski = calinski_harabasz_score(self.scaled_data, labels)
+            # Metrics require at least 2 labels to be computed and more than 1 cluster.
+            if len(set(labels)) > 1:
+                silhouette = silhouette_score(data_for_clustering, labels)
+                calinski = calinski_harabasz_score(data_for_clustering, labels)
+            else:
+                silhouette = np.nan # Or some other indicator of failure
+                calinski = np.nan
+                logger.warning(f"KMeans: Only one cluster found for k={k}. Silhouette and Calinski-Harabasz scores cannot be computed.")
             inertia = kmeans.inertia_
 
             results[k] = {
@@ -104,7 +177,7 @@ class PhenotypeDiscovery:
         self.clustering_results['kmeans'] = results
         return results
 
-    def perform_agglomerative(self, n_clusters_range: range = range(2, 7)) -> Dict:
+    def perform_agglomerative(self, n_clusters_range: range = range(2, 7), columns_to_use: Optional[List[str]] = None) -> Dict:
         """
         Perform Agglomerative Hierarchical clustering.
 
@@ -116,15 +189,41 @@ class PhenotypeDiscovery:
         """
         logger.info("Performing Agglomerative clustering...")
 
+        data_for_clustering = self.scaled_data
+        if columns_to_use and isinstance(columns_to_use, list) and len(columns_to_use) > 0:
+            valid_columns = [col for col in columns_to_use if col in self.scaled_data.columns]
+            if len(valid_columns) < len(columns_to_use):
+                missing_cols = set(columns_to_use) - set(valid_columns)
+                logger.warning(f"Agglomerative: Some selected columns were not found in scaled data and will be ignored: {missing_cols}")
+            if not valid_columns:
+                logger.error("Agglomerative: No valid columns selected for clustering after filtering. Aborting.")
+                return {}
+            data_for_clustering = self.scaled_data[valid_columns]
+            logger.info(f"Agglomerative: Using {len(valid_columns)} selected features for clustering: {', '.join(valid_columns[:5])}{'...' if len(valid_columns) > 5 else ''}")
+        elif columns_to_use is not None:
+             logger.warning("Agglomerative: 'columns_to_use' was provided but is empty or invalid. Using all available features.")
+
         results = {}
+        if data_for_clustering.empty or data_for_clustering.shape[1] == 0:
+            logger.error("Agglomerative: Data for clustering is empty or has no features. Aborting.")
+            return {}
+
         for k in n_clusters_range:
+            if data_for_clustering.shape[0] < k:
+                logger.warning(f"Agglomerative: Number of samples ({data_for_clustering.shape[0]}) is less than number of clusters ({k}). Skipping k={k}.")
+                continue
             # Fit Agglomerative clustering
             agglomerative = AgglomerativeClustering(n_clusters=k, linkage='ward')
-            labels = agglomerative.fit_predict(self.scaled_data)
+            labels = agglomerative.fit_predict(data_for_clustering)
 
             # Calculate metrics
-            silhouette = silhouette_score(self.scaled_data, labels)
-            calinski = calinski_harabasz_score(self.scaled_data, labels)
+            if len(set(labels)) > 1:
+                silhouette = silhouette_score(data_for_clustering, labels)
+                calinski = calinski_harabasz_score(data_for_clustering, labels)
+            else:
+                silhouette = np.nan
+                calinski = np.nan
+                logger.warning(f"Agglomerative: Only one cluster found for k={k}. Silhouette and Calinski-Harabasz scores cannot be computed.")
 
             results[k] = {
                 'model': agglomerative,
@@ -139,7 +238,7 @@ class PhenotypeDiscovery:
         self.clustering_results['agglomerative'] = results
         return results
 
-    def perform_gmm(self, n_components_range: range = range(2, 7)) -> Dict:
+    def perform_gmm(self, n_components_range: range = range(2, 7), columns_to_use: Optional[List[str]] = None) -> Dict:
         """
         Perform Gaussian Mixture Model clustering.
 
@@ -151,19 +250,45 @@ class PhenotypeDiscovery:
         """
         logger.info("Performing Gaussian Mixture Model clustering...")
 
+        data_for_clustering = self.scaled_data
+        if columns_to_use and isinstance(columns_to_use, list) and len(columns_to_use) > 0:
+            valid_columns = [col for col in columns_to_use if col in self.scaled_data.columns]
+            if len(valid_columns) < len(columns_to_use):
+                missing_cols = set(columns_to_use) - set(valid_columns)
+                logger.warning(f"GMM: Some selected columns were not found in scaled data and will be ignored: {missing_cols}")
+            if not valid_columns:
+                logger.error("GMM: No valid columns selected for clustering after filtering. Aborting.")
+                return {}
+            data_for_clustering = self.scaled_data[valid_columns]
+            logger.info(f"GMM: Using {len(valid_columns)} selected features for clustering: {', '.join(valid_columns[:5])}{'...' if len(valid_columns) > 5 else ''}")
+        elif columns_to_use is not None:
+             logger.warning("GMM: 'columns_to_use' was provided but is empty or invalid. Using all available features.")
+
         results = {}
+        if data_for_clustering.empty or data_for_clustering.shape[1] == 0:
+            logger.error("GMM: Data for clustering is empty or has no features. Aborting.")
+            return {}
+
         for n in n_components_range:
+            if data_for_clustering.shape[0] < n:
+                logger.warning(f"GMM: Number of samples ({data_for_clustering.shape[0]}) is less than number of components ({n}). Skipping n={n}.")
+                continue
             # Fit GMM
             gmm = GaussianMixture(n_components=n, random_state=42)
-            gmm.fit(self.scaled_data)
-            labels = gmm.predict(self.scaled_data)
-            proba = gmm.predict_proba(self.scaled_data)
+            gmm.fit(data_for_clustering)
+            labels = gmm.predict(data_for_clustering)
+            proba = gmm.predict_proba(data_for_clustering)
 
             # Calculate metrics
-            silhouette = silhouette_score(self.scaled_data, labels)
-            calinski = calinski_harabasz_score(self.scaled_data, labels)
-            bic = gmm.bic(self.scaled_data)
-            aic = gmm.aic(self.scaled_data)
+            if len(set(labels)) > 1:
+                silhouette = silhouette_score(data_for_clustering, labels)
+                calinski = calinski_harabasz_score(data_for_clustering, labels)
+            else:
+                silhouette = np.nan
+                calinski = np.nan
+                logger.warning(f"GMM: Only one cluster found for n_components={n}. Silhouette and Calinski-Harabasz scores cannot be computed.")
+            bic = gmm.bic(data_for_clustering)
+            aic = gmm.aic(data_for_clustering)
 
             results[n] = {
                 'model': gmm,
@@ -182,9 +307,7 @@ class PhenotypeDiscovery:
         self.clustering_results['gmm'] = results
         return results
 
-    def calculate_gap_statistic(self, method: str = 'kmeans',
-                              n_clusters_range: range = range(2, 7),
-                              n_references: int = 10) -> Dict:
+    def calculate_gap_statistic(self, method: str = 'kmeans', n_clusters_range: range = range(2, 7), n_references: int = 10) -> Dict:
         """
         Calculate gap statistic for determining optimal number of clusters.
 
@@ -260,8 +383,7 @@ class PhenotypeDiscovery:
                 W_k += np.sum(cdist(cluster_points, [centers[i]], 'euclidean')**2)
         return W_k
 
-    def bootstrap_stability(self, method: str = 'kmeans', k: int = 3,
-                          n_bootstrap: int = 100, subsample_size: float = 0.8) -> Dict:
+    def bootstrap_stability(self, method: str = 'kmeans', k: int = 3, n_bootstrap: int = 100, subsample_size: float = 0.8) -> Dict:
         """
         Assess clustering stability using bootstrap resampling.
 

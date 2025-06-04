@@ -17,6 +17,23 @@ from tekoa.visualization.ui_utils import create_download_link
 class ClusteringPage:
     """Clustering analysis page component for Phase II of the dashboard."""
 
+    ALL_FEATURE_CATEGORIES = [
+        'demographic', 'clinical', 'treatment', 'outcome', 'baseline',
+        'follow_up', 'pain_assessment', 'physical_assessment',
+        'psychological', 'qst', 'biomarker'
+    ]
+
+    DEFAULT_CLUSTERING_COLUMNS = [
+        "History.Age", "BMI", "History.Gender", "History.Race", "Education",
+        "Marital.status", "Index.knee", "Klscore.total", "OAmonth",
+        "NRS.Average.Daily.0", "WOMAC.Pain.0", "WOMAC.Stiffness.0",
+        "WOMAC.Functional.0", "HPTH.Knee.0", "HPTO.Knee.0", "HPTH.Arm.0",
+        "HPTO.Arm.0", "PPT.Knee.Medial.0", "PPT.Trapezius.0",
+        "Punctate.10Series.patella.0", "PMS.TS.Patella.0",
+        "Punctate.10Series.hand.0", "PMS.TS.hand.0", "CPM.30sec.0",
+        "CPM.60sec.0", "ColdPain.0"
+    ]
+
     @staticmethod
     def render(data_manager: DataManager):
         """Render the clustering analysis page."""
@@ -24,11 +41,10 @@ class ClusteringPage:
 
         st.markdown("""
         This page implements clustering algorithms to discover phenotypes in the data.
-        You can use K-means, K-medoids (PAM), or Gaussian Mixture Models (GMM) to identify
+        You can use K-means, Agglomerative Clustering, or Gaussian Mixture Models (GMM) to identify
         natural groupings of patients that may respond differently to treatments.
         """)
 
-        # Check if data is ready for clustering
         if st.session_state.processed_data is None:
             st.warning("Please complete Phase I data preparation before proceeding to clustering.")
             return
@@ -36,106 +52,140 @@ class ClusteringPage:
         # Initialize phenotype discovery if needed
         use_transformed = st.checkbox(
             "Use dimensionality-reduced data (FAMD/PCA components)",
-            value=True,
+            value=False,
+            key="clustering_use_transformed",
             help="If checked, uses the transformed data from dimensionality reduction. Otherwise uses processed variables."
         )
 
         data_manager.initialize_phenotype_discovery(use_transformed_data=use_transformed)
 
-        if data_manager.phenotype_discovery is None:
-            st.error("Unable to initialize phenotype discovery. Please check data preparation.")
+        if data_manager.phenotype_discovery is None or \
+            data_manager.phenotype_discovery.data_for_clustering is None or \
+            data_manager.phenotype_discovery.data_for_clustering.empty:
+            st.error("Unable to initialize phenotype discovery or data for clustering is empty. Please check data preparation steps.")
             return
 
-        # Tab navigation
+        selected_columns_for_clustering = None
+        run_clustering_disabled = False
+
+        if not use_transformed:
+            st.subheader("Select Features for Clustering")
+            all_available_features = data_manager.phenotype_discovery.data_for_clustering.columns.tolist()
+
+            # Fallback if get_variable_categories is not available or returns None
+            try:
+                variable_categories = data_manager.get_variable_categories() or {}
+            except AttributeError:
+                variable_categories = {}
+                st.warning("Variable category information is not available. All features are listed under 'Other'.")
+
+            temp_selected_vars = []
+            offered_vars = set() # To keep track of variables already offered to avoid duplication
+
+            for category_name in ClusteringPage.ALL_FEATURE_CATEGORIES:
+                # Ensure category_name exists in variable_categories and is a list
+                vars_in_category = variable_categories.get(category_name, [])
+                if not isinstance(vars_in_category, list):
+                    vars_in_category = [] # Default to empty list if not a list
+
+                # Filter for variables present in the current clustering data and not yet offered
+                relevant_vars_for_multiselect = [
+                    var for var in vars_in_category
+                    if var in all_available_features and var not in offered_vars
+                ]
+
+                if relevant_vars_for_multiselect:
+                    # Determine default selection for this category based on DEFAULT_CLUSTERING_COLUMNS
+                    default_selection_for_cat = [
+                        var for var in relevant_vars_for_multiselect
+                        if var in ClusteringPage.DEFAULT_CLUSTERING_COLUMNS
+                    ]
+                    with st.expander(f"{category_name.replace('_', ' ').capitalize()} Variables"):
+                        selected_in_cat = st.multiselect(
+                            f"Select {category_name.replace('_', ' ')} variables for clustering",
+                            options=relevant_vars_for_multiselect,
+                            default=default_selection_for_cat,
+                            key=f"clustering_select_{category_name}"
+                        )
+                        temp_selected_vars.extend(selected_in_cat)
+                        offered_vars.update(relevant_vars_for_multiselect) # Mark these as offered
+
+            # Handle features not in any predefined category or if categories are missing
+            remaining_features = [var for var in all_available_features if var not in offered_vars]
+            if remaining_features:
+                # Determine default selection for 'Other' category
+                default_selection_for_other = [
+                    var for var in remaining_features
+                    if var in ClusteringPage.DEFAULT_CLUSTERING_COLUMNS
+                ]
+                with st.expander("Other Available Variables"):
+                    selected_other = st.multiselect(
+                        "Select other variables for clustering",
+                        options=remaining_features,
+                        default=default_selection_for_other,
+                        key="clustering_select_other_remaining"
+                    )
+                    temp_selected_vars.extend(selected_other)
+
+            selected_columns_for_clustering = sorted(list(set(temp_selected_vars)))
+
+            if not selected_columns_for_clustering:
+                st.warning("No features selected. Please select at least one feature to enable clustering.")
+                run_clustering_disabled = True
+            else:
+                st.info(f"{len(selected_columns_for_clustering)} features selected for clustering: {', '.join(selected_columns_for_clustering[:5])}{'...' if len(selected_columns_for_clustering) > 5 else ''}")
+        else:
+            st.info("Using all dimensionality-reduced components for clustering. Feature selection is not applicable.")
+
         tabs = st.tabs(["K-means", "Agglomerative", "Gaussian Mixture Model", "Compare Methods"])
 
         with tabs[0]:  # K-means
             st.subheader("K-means Clustering")
-
-            st.markdown("""
-            K-means is a fast, simple clustering algorithm that partitions data into k clusters
-            by minimizing within-cluster variance. It works best with spherical clusters of similar size.
-            """)
-
+            st.markdown("""K-means is a fast, simple clustering algorithm that partitions data into k clusters by minimizing within-cluster variance. It works best with spherical clusters of similar size.""")
             col1, col2 = st.columns(2)
-
             with col1:
-                k_range_kmeans = st.slider(
-                    "Range of clusters to try",
-                    min_value=2,
-                    max_value=10,
-                    value=(2, 6),
-                    key="k_range_kmeans"
-                )
+                k_range_kmeans = st.slider( "Range of clusters to try", min_value=2, max_value=10, value=(2, 6), key="k_range_kmeans_clustering" )
 
             with col2:
-                if st.button("Run K-means Clustering", key="run_kmeans"):
+                if st.button("Run K-means Clustering", key="run_kmeans_clustering", disabled=run_clustering_disabled):
                     with st.spinner("Performing K-means clustering..."):
                         results = data_manager.perform_clustering(
                             method='kmeans',
-                            n_clusters_range=range(k_range_kmeans[0], k_range_kmeans[1] + 1)
+                            n_clusters_range=range(k_range_kmeans[0], k_range_kmeans[1] + 1),
+                            columns_to_use=selected_columns_for_clustering
                         )
-
                         st.success("K-means clustering completed!")
-
-                        # Display results
                         st.subheader("Clustering Results")
-
-                        # Create metrics table
                         metrics_data = []
-                        for k, res in results.items():
-                            metrics_data.append({
-                                'K': k,
-                                'Silhouette Score': res['silhouette'],
-                                'Calinski-Harabasz': res['calinski'],
-                                'Inertia': res['inertia']
-                            })
-
-                        metrics_df = pd.DataFrame(metrics_data)
-
-                        # Plot metrics
-                        fig = px.line(
-                            metrics_df,
-                            x='K',
-                            y='Silhouette Score',
-                            title='Silhouette Score by Number of Clusters',
-                            markers=True
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-
-                        # Display table
-                        st.dataframe(metrics_df.style.format({
-                            'Silhouette Score': '{:.3f}',
-                            'Calinski-Harabasz': '{:.1f}',
-                            'Inertia': '{:.1f}'
-                        }))
+                        if results:
+                            for k, res in results.items():
+                                metrics_data.append({
+                                    'K': k,
+                                    'Silhouette Score': res.get('silhouette'),
+                                    'Calinski-Harabasz': res.get('calinski'),
+                                    'Inertia': res.get('inertia')
+                                })
+                            metrics_df = pd.DataFrame(metrics_data)
+                            fig = px.line(metrics_df, x='K', y='Silhouette Score', title='Silhouette Score by Number of Clusters', markers=True)
+                            st.plotly_chart(fig, use_container_width=True)
+                            st.dataframe(metrics_df.style.format({'Silhouette Score': '{:.3f}', 'Calinski-Harabasz': '{:.1f}', 'Inertia': '{:.1f}'}))
+                        else:
+                            st.warning("K-means clustering did not return any results.")
 
         with tabs[1]:  # Agglomerative
             st.subheader("Agglomerative Clustering")
-
-            st.markdown("""
-            Agglomerative clustering is a bottom-up approach that merges clusters in a bottom-up manner.
-            """)
-
+            st.markdown("""Agglomerative clustering is a bottom-up approach that merges clusters in a hierarchical manner.""")
             col1, col2 = st.columns(2)
-
             with col1:
-                k_range_agglomerative = st.slider(
-                    "Range of clusters to try",
-                    min_value=2,
-                    max_value=10,
-                    value=(2, 6),
-                    key="k_range_agglomerative"
-                )
-
+                k_range_agglomerative = st.slider("Range of clusters to try", 2, 10, (2, 6), key="k_range_agglomerative_clustering")
             with col2:
-                if st.button("Run Agglomerative Clustering", key="run_agglomerative"):
+                if st.button("Run Agglomerative Clustering", key="run_agglomerative_clustering", disabled=run_clustering_disabled):
                     with st.spinner("Performing Agglomerative clustering..."):
                         results = data_manager.perform_clustering(
                             method='agglomerative',
-                            n_clusters_range=range(k_range_agglomerative[0], k_range_agglomerative[1] + 1)
+                            n_clusters_range=range(k_range_agglomerative[0], k_range_agglomerative[1] + 1),
+                            columns_to_use=selected_columns_for_clustering
                         )
-
                         st.success("Agglomerative clustering completed!")
 
                         # Display results
@@ -143,132 +193,88 @@ class ClusteringPage:
 
                         # Create metrics table
                         metrics_data = []
-                        for k, res in results.items():
-                            metrics_data.append({
-                                'K': k,
-                                'Silhouette Score': res['silhouette'],
-                                'Calinski-Harabasz': res['calinski']
-                            })
-
-                        metrics_df = pd.DataFrame(metrics_data)
-
-                        # Plot metrics
-                        fig = px.line(
-                            metrics_df,
-                            x='K',
-                            y='Silhouette Score',
-                            title='Silhouette Score by Number of Clusters',
-                            markers=True
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-
-                        # Display table
-                        st.dataframe(metrics_df.style.format({
-                            'Silhouette Score': '{:.3f}',
-                            'Calinski-Harabasz': '{:.1f}'
-                        }))
+                        if results:
+                            for k, res in results.items():
+                                metrics_data.append({
+                                    'K': k,
+                                    'Silhouette Score': res.get('silhouette'),
+                                    'Calinski-Harabasz': res.get('calinski')
+                                })
+                            metrics_df = pd.DataFrame(metrics_data)
+                            fig = px.line(metrics_df, x='K', y='Silhouette Score', title='Silhouette Score by Number of Clusters', markers=True)
+                            st.plotly_chart(fig, use_container_width=True)
+                            st.dataframe(metrics_df.style.format({'Silhouette Score': '{:.3f}', 'Calinski-Harabasz': '{:.1f}'}))
+                        else:
+                            st.warning("Agglomerative clustering did not return any results.")
 
         with tabs[2]:  # GMM
             st.subheader("Gaussian Mixture Model")
-
-            st.markdown("""
-            Gaussian Mixture Models provide soft clustering assignments, where each patient has a
-            probability of belonging to each cluster. This is useful when clusters overlap.
-            """)
-
+            st.markdown("""Gaussian Mixture Models provide soft clustering assignments, where each patient has a probability of belonging to each cluster. This is useful when clusters overlap.""")
             col1, col2 = st.columns(2)
-
             with col1:
-                n_components_range = st.slider(
-                    "Range of components to try",
-                    min_value=2,
-                    max_value=10,
-                    value=(2, 6),
-                    key="n_components_gmm"
-                )
-
+                n_components_range_gmm = st.slider("Range of components to try", 2, 10, (2, 6), key="n_components_gmm_clustering")
             with col2:
-                if st.button("Run GMM Clustering", key="run_gmm"):
+                if st.button("Run GMM Clustering", key="run_gmm_clustering", disabled=run_clustering_disabled):
                     with st.spinner("Performing GMM clustering..."):
                         results = data_manager.perform_clustering(
                             method='gmm',
-                            n_clusters_range=range(n_components_range[0], n_components_range[1] + 1)
+                            n_clusters_range=range(n_components_range_gmm[0], n_components_range_gmm[1] + 1),
+                            columns_to_use=selected_columns_for_clustering
                         )
-
                         st.success("GMM clustering completed!")
-
-                        # Display results
                         st.subheader("Clustering Results")
-
-                        # Create metrics table
                         metrics_data = []
-                        for k, res in results.items():
-                            metrics_data.append({
-                                'Components': k,
-                                'Silhouette Score': res['silhouette'],
-                                'BIC': res['bic'],
-                                'AIC': res['aic']
-                            })
-
-                        metrics_df = pd.DataFrame(metrics_data)
-
-                        # Plot BIC/AIC
-                        fig = px.line(
-                            metrics_df,
-                            x='Components',
-                            y=['BIC', 'AIC'],
-                            title='Model Selection Criteria',
-                            labels={'value': 'Score', 'variable': 'Criterion'}
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-
-                        # Display table
-                        st.dataframe(metrics_df.style.format({
-                            'Silhouette Score': '{:.3f}',
-                            'BIC': '{:.1f}',
-                            'AIC': '{:.1f}'
-                        }))
+                        if results:
+                            for k, res in results.items():
+                                metrics_data.append({
+                                    'Components': k,
+                                    'Silhouette Score': res.get('silhouette'),
+                                    'BIC': res.get('bic'),
+                                    'AIC': res.get('aic')
+                                })
+                            metrics_df = pd.DataFrame(metrics_data)
+                            fig = px.line(metrics_df, x='Components', y=['BIC', 'AIC'], title='Model Selection Criteria', labels={'value': 'Score', 'variable': 'Criterion'})
+                            st.plotly_chart(fig, use_container_width=True)
+                            st.dataframe(metrics_df.style.format({'Silhouette Score': '{:.3f}', 'BIC': '{:.1f}', 'AIC': '{:.1f}'}))
+                        else:
+                            st.warning("GMM clustering did not return any results.")
 
         with tabs[3]:  # Compare Methods
             st.subheader("Compare Clustering Methods")
-
-            # Check if results exist
             if 'phenotype_results' not in st.session_state or not st.session_state.phenotype_results:
                 st.info("Please run at least one clustering method to see comparisons.")
                 return
 
-            # Collect all results
-            all_results = []
+            all_results_comparison = []
             for method, method_data in st.session_state.phenotype_results.items():
-                if 'clustering' in method_data:
+                if 'clustering' in method_data and method_data['clustering']:
                     for k, res in method_data['clustering'].items():
-                        all_results.append({
-                            'Method': method.upper(),
-                            'K': k,
-                            'Silhouette Score': res['silhouette']
-                        })
+                        if res and 'silhouette' in res: # Ensure result and silhouette score exist
+                            all_results_comparison.append({
+                                'Method': method.upper(),
+                                'K': k,
+                                'Silhouette Score': res['silhouette']
+                            })
 
-            if all_results:
-                comparison_df = pd.DataFrame(all_results)
+            if all_results_comparison:
+                comparison_df = pd.DataFrame(all_results_comparison)
+                if not comparison_df.empty and 'Silhouette Score' in comparison_df.columns:
+                    fig_compare = px.line(comparison_df, x='K', y='Silhouette Score', color='Method', title='Silhouette Score Comparison Across Methods', markers=True)
+                    st.plotly_chart(fig_compare, use_container_width=True)
 
-                # Create comparison plot
-                fig = px.line(
-                    comparison_df,
-                    x='K',
-                    y='Silhouette Score',
-                    color='Method',
-                    title='Silhouette Score Comparison Across Methods',
-                    markers=True
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                    try:
+                        best_config_idx = comparison_df['Silhouette Score'].idxmax()
+                        best_config = comparison_df.loc[best_config_idx]
+                        st.success(f"Best configuration: {best_config['Method']} with K={best_config['K']} (Silhouette Score: {best_config['Silhouette Score']:.3f})")
+                    except ValueError: # Handle case where 'Silhouette Score' might be all NaN or empty
+                        st.warning("Could not determine best configuration from available results.")
 
-                # Find best configuration
-                best_config = comparison_df.loc[comparison_df['Silhouette Score'].idxmax()]
-                st.success(f"Best configuration: {best_config['Method']} with K={best_config['K']} (Silhouette Score: {best_config['Silhouette Score']:.3f})")
-
-                # Display comparison table
-                pivot_df = comparison_df.pivot(index='K', columns='Method', values='Silhouette Score')
-                st.dataframe(pivot_df.style.format('{:.3f}').highlight_max(axis=1))
+                    pivot_df = comparison_df.pivot(index='K', columns='Method', values='Silhouette Score')
+                    st.dataframe(pivot_df.style.format('{:.3f}').highlight_max(axis=1, props='font-weight:bold;background-color:lightyellow;'))
+                else:
+                    st.info("Not enough data with Silhouette Scores to compare methods.")
+            else:
+                st.info("No clustering results with Silhouette Scores available for comparison.")
 
 
 class ValidationPage:
@@ -357,10 +363,10 @@ class ValidationPage:
                     optimal_idx = k_values.index(optimal_k)
                     plt.scatter(optimal_k, gaps[optimal_idx], color='red', s=200, zorder=5)
                     plt.annotate(f'Optimal k={optimal_k}',
-                               xy=(optimal_k, gaps[optimal_idx]),
-                               xytext=(optimal_k + 0.5, gaps[optimal_idx]),
-                               fontsize=12,
-                               color='red')
+                                xy=(optimal_k, gaps[optimal_idx]),
+                                xytext=(optimal_k + 0.5, gaps[optimal_idx]),
+                                fontsize=12,
+                                color='red')
 
                     st.pyplot(fig)
 
