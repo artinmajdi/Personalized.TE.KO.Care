@@ -595,8 +595,8 @@ class CharacterizationPage:
         with col1:
             # Get methods with results
             available_methods = [m for m in ['kmeans', 'agglomerative', 'gmm']
-                               if m in st.session_state.phenotype_results
-                               and 'clustering' in st.session_state.phenotype_results[m]]
+                                if m in st.session_state.phenotype_results
+                                and 'clustering' in st.session_state.phenotype_results[m]]
 
             if not available_methods:
                 st.warning("No clustering results available.")

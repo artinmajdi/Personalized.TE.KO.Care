@@ -158,16 +158,16 @@ class DataLoader:
 
         # Define patterns for categorization
         patterns = {
-            'demographic': ['age', 'gender', 'race', 'education', 'height', 'weight', 'history', 'bmi'],
-            'clinical': ['knee', 'pain', 'klscore', 'womac', 'oa', 'joint'],
-            'treatment': ['tdcs', 'tx.group', 'meditation', 'treatment'],
-            'outcome': ['differ', 'm1', 'm2', 'm3', 'change'],
-            'baseline': ['_0', '.0', 'baseline'],
-            'follow_up': ['_5', '_10', '.5', '.10', 'follow'],
-            'pain_assessment': ['pain', 'womac', 'nrs'],
+            'demographic'        : ['age', 'gender', 'race', 'education', 'height', 'weight', 'history', 'bmi'],
+            'clinical'           : ['knee', 'pain', 'klscore', 'womac', 'oa', 'joint'],
+            'treatment'          : ['tdcs', 'tx.group', 'meditation', 'treatment'],
+            'outcome'            : ['differ', 'm1', 'm2', 'm3', 'change'],
+            'baseline'           : ['_0', '.0', 'baseline'],
+            'follow_up'          : ['_5', '_10', '.5', '.10', 'follow'],
+            'pain_assessment'    : ['pain', 'womac', 'nrs'],
             'physical_assessment': ['functional', 'physical', 'step'],
-            'psychological': ['pcs', 'fmi', 'css', 'cesd', 'catastrophizing', 'depression'],
-            'qst': ['hpth', 'hpto', 'ppt', 'qst', 'temperature', 'punctate', 'cpm']
+            'psychological'      : ['pcs', 'fmi', 'css', 'cesd', 'catastrophizing', 'depression'],
+            'qst'                : ['hpth', 'hpto', 'ppt', 'qst', 'temperature', 'punctate', 'cpm']
         }
 
         # Categorize each variable
