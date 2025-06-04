@@ -699,7 +699,7 @@ class DictionaryPage:
             lookup_var = st.selectbox(
                 "Select a variable to look up",
                 options=list(data_manager.data.columns),
-                index=0
+                index=1
             )
 
             if lookup_var:

@@ -38,7 +38,7 @@ class PhenotypeDiscovery:
         self.numeric_data = None
         self.clustering_results = {}
         self.validation_metrics = {}
-        self.optimal_clusters = {}
+        self.optimal_clusters   = {}
         self.phenotype_profiles = {}
 
         # Prepare data for clustering
@@ -49,8 +49,8 @@ class PhenotypeDiscovery:
         """Prepare data for clustering by handling mixed types, missing values, and problematic columns."""
         if self.data is None or self.data.empty:
             logger.error("Input data is None or empty. Cannot prepare data.")
-            self.numeric_data = pd.DataFrame()
-            self.scaled_data = pd.DataFrame()
+            self.numeric_data        = pd.DataFrame()
+            self.scaled_data         = pd.DataFrame()
             self.data_for_clustering = pd.DataFrame() # Ensure this is also empty
             return
 
@@ -66,17 +66,17 @@ class PhenotypeDiscovery:
 
         if numeric_df.empty:
             logger.warning("No numeric columns remaining after removing all-NaN columns.")
-            self.numeric_data = pd.DataFrame()
-            self.scaled_data = pd.DataFrame()
+            self.numeric_data        = pd.DataFrame()
+            self.scaled_data         = pd.DataFrame()
             self.data_for_clustering = pd.DataFrame()
             return
 
         # 2. Impute remaining NaNs (e.g., with mean)
         # Only impute if there are any NaNs to avoid unnecessary computation
         if numeric_df.isnull().any().any():
-            imputer = SimpleImputer(strategy='mean')
+            imputer                   = SimpleImputer(strategy='mean')
             numeric_df_imputed_values = imputer.fit_transform(numeric_df)
-            numeric_df = pd.DataFrame(numeric_df_imputed_values, columns=numeric_df.columns, index=numeric_df.index)
+            numeric_df                = pd.DataFrame(numeric_df_imputed_values, columns=numeric_df.columns, index=numeric_df.index)
             logger.info(f"Imputed missing values using 'mean' strategy. Data shape: {numeric_df.shape}")
         else:
             logger.info("No NaNs found in numeric data to impute.")
@@ -90,20 +90,20 @@ class PhenotypeDiscovery:
         
         if numeric_df.empty:
             logger.warning("No numeric columns remaining after removing zero-variance columns.")
-            self.numeric_data = pd.DataFrame()
-            self.scaled_data = pd.DataFrame()
+            self.numeric_data        = pd.DataFrame()
+            self.scaled_data         = pd.DataFrame()
             self.data_for_clustering = pd.DataFrame()
             return
 
-        self.numeric_data = numeric_df # This is the cleaned, imputed, non-zero variance data
+        self.numeric_data        = numeric_df # This is the cleaned, imputed, non-zero variance data
         self.data_for_clustering = self.numeric_data # UI uses this for feature names
 
         # 4. Standardize the data
         scaler = StandardScaler()
         self.scaled_data = pd.DataFrame(
-            scaler.fit_transform(self.numeric_data),
-            columns=self.numeric_data.columns,
-            index=self.numeric_data.index
+            data    = scaler.fit_transform(self.numeric_data),
+            columns = self.numeric_data.columns,
+            index   = self.numeric_data.index
         )
 
         logger.info(f"Data preparation complete. Final features for clustering: {self.numeric_data.shape[1]}. Samples: {self.numeric_data.shape[0]}.")
