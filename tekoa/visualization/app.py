@@ -33,6 +33,10 @@ from tekoa.visualization.pages import (
     PipelinePage
 )
 
+# TODO: need to either start from the begining (the branch phase/02-clustering), which would require a lot of time, or merge this main branch into the phase/02-clustering branch and check what Gemini has added.
+# Things are added which needs to be checked to make sure hasn't impacted other things, are
+#   1) ability to load the new 208 patients excel without error
+#   2) show a column selection in the "Clustering Analysis" tab.
 
 from tekoa.visualization.phase2_pages import ClusteringPage, ValidationPage, CharacterizationPage
 

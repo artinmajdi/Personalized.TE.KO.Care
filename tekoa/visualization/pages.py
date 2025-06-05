@@ -65,8 +65,31 @@ class HeaderComponent:
             )
 
 
+def _on_ignore_follow_up_change():
+    """Callback to reset relevant session state when 'Ignore Follow-up Data' checkbox changes."""
+    keys_to_reset = [
+        'processed_data', 'imputed_data', 'missing_data_report',
+        'variable_screener_results', 'dimensionality_reducer_results',
+        'phenotype_discovery_results', 'pipeline_results', 'phenotypes',
+        'phenotype_results', 'data_explorer_filtered_data',
+        # Add any other session state keys that store derived data based on the column set
+        # or specific states of analysis pages.
+        # Resetting components in DataManager if they hold state based on data
+        'variable_screener_instance', 'dimensionality_reducer_instance',
+        'data_quality_enhancer_instance', 'phenotype_discovery_instance'
+    ]
+    for key in keys_to_reset:
+        if key in st.session_state:
+            st.session_state[key] = None
+    
+    # Also clear any cached data within DataManager if it's directly stored and not dynamically generated
+    # This part depends on DataManager's implementation. For now, resetting session state
+    # and relying on DataManager to re-load/re-filter on next access is the primary mechanism.
+    
+    st.rerun()
+
 class SidebarComponent:
-    """Sidebar component for the dashboard."""
+    """Sidebar component for navigation and data loading."""
 
     @staticmethod
     def render(data_manager: DataManager):
@@ -84,9 +107,14 @@ class SidebarComponent:
                 if 'uploaded_file' not in st.session_state or st.session_state.uploaded_file != uploaded_file:
                     st.session_state.uploaded_file = uploaded_file
                     # Reset data to force reloading with the new file
-                    data_manager.data = None
+                    data_manager._raw_data = None  # Reset the internal raw data attribute
                     data_manager.dictionary = None
-                    st.success("File uploaded! Click 'Load Dataset' to process it.")
+                    if 'processed_data' in st.session_state:
+                        st.session_state.processed_data = None # Reset processed_data in session state
+                    logger.info("Sidebar: New file uploaded. Cleared existing data manager states (_raw_data, dictionary, processed_data).")
+                    st.success("File uploaded! Click 'Load Dataset' to process the new file.")
+                    # Optionally, trigger a rerun if immediate UI changes are needed post-upload but pre-load
+                    # st.rerun()
 
             # Add a load button
             if 'uploaded_file' in st.session_state and st.session_state.uploaded_file is not None:
@@ -95,9 +123,19 @@ class SidebarComponent:
                     if data_manager.data is None or data_manager.dictionary is None:
                         st.rerun()
 
-            st.markdown("### Navigation")
+            # Checkbox to check if the followup data should be ignored.
+            if 'ignore_follow_up_data' not in st.session_state:
+                st.session_state.ignore_follow_up_data = False
+            
+            st.checkbox(
+                "Ignore Follow-up Data", 
+                key='ignore_follow_up_data',
+                on_change=_on_ignore_follow_up_change,
+                help="If checked, all columns categorized as 'follow_up' will be excluded from the dataset for all analyses."
+            )
+            st.divider()
 
-            # Navigation buttons
+            st.markdown("### Navigation")
             if st.button("📊 Overview", use_container_width=True):
                 st.session_state.current_page = 'Overview'
                 st.rerun()

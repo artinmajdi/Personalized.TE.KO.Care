@@ -31,20 +31,42 @@ class DataManager:
         """Initialize the data manager."""
         self.data_loader: Optional[DataLoader] = None
         self.dataset_name = DatasetNames.TEKOA.value
-        self.data = None
-        self.dictionary = None
-        self.imputed_data = None
-        self.treatment_groups = None
-        self.missing_data_report = None
+        self._raw_data: Optional[pd.DataFrame] = None  # Stores the original loaded data
+        self.dictionary: Optional[pd.DataFrame] = None
+        self.imputed_data: Optional[pd.DataFrame] = None
+        self.treatment_groups: Optional[Dict[str, pd.DataFrame]] = None
+        self.missing_data_report: Optional[pd.DataFrame] = None
 
         # Analysis components
-        self.variable_screener = None
-        self.dimensionality_reducer = None
-        self.data_quality_enhancer = None
-        self.phenotype_discovery = None
+        self.variable_screener: Optional[VariableScreener] = None
+        self.dimensionality_reducer: Optional[DimensionalityReducer] = None
+        self.data_quality_enhancer: Optional[DataQualityEnhancer] = None
+        self.phenotype_discovery: Optional[PhenotypeDiscovery] = None
 
         # Initialize session state for data management
         self._initialize_session_state()
+
+    @property
+    def data(self) -> Optional[pd.DataFrame]:
+        """
+        Get the current working dataset, potentially filtered to exclude follow-up data.
+        Returns None if no data is loaded (_raw_data is None).
+        """
+        if self._raw_data is None:
+            return None
+
+        if st.session_state.get('ignore_follow_up_data', False):
+            if self.data_loader:
+                variable_categories = self.data_loader.get_variable_categories()
+                follow_up_cols = variable_categories.get('follow_up', [])
+                # Ensure we only try to drop columns that actually exist in _raw_data
+                cols_to_drop = [col for col in follow_up_cols if col in self._raw_data.columns]
+                if cols_to_drop:
+                    logger.info(f"DataManager: Ignoring follow-up columns: {cols_to_drop}")
+                    return self._raw_data.drop(columns=cols_to_drop)
+            else:
+                logger.warning("DataManager: ignore_follow_up_data is True, but DataLoader is not available to get follow_up columns.")
+        return self._raw_data
 
     def _initialize_session_state(self):
         """Initialize session state variables for data management."""
@@ -70,64 +92,90 @@ class DataManager:
         Returns:
             bool: True if data loaded successfully, False otherwise.
         """
-        self.data_loader = None # Reset data_loader at the start of an attempt
+        # Reset relevant states on new load attempt
+        self.data_loader = None
+        self._raw_data = None
+        self.dictionary = None
+        self.missing_data_report = None
+        self.imputed_data = None
+        st.session_state.processed_data = None
+        # Potentially reset other downstream analysis components if they hold state
+        self.variable_screener = None
+        self.dimensionality_reducer = None
+        self.data_quality_enhancer = None
+        self.phenotype_discovery = None
 
         if uploaded_file_obj is not None:
-            file_name_for_log = getattr(uploaded_file_obj, 'name', 'uploaded_file') # Get name if available for logging
+            file_name_for_log = getattr(uploaded_file_obj, 'name', 'uploaded_file')
             logger.info(f"DataManager attempting to load data from provided uploaded file: {file_name_for_log}")
-            # DataLoader is initialized with the uploaded file; data_dir will be None by default in DataLoader
-            # ensuring it doesn't look for default paths.
             self.data_loader = DataLoader(uploaded_file=uploaded_file_obj)
         else:
             logger.warning("DataManager.load_data called without an 'uploaded_file_obj'. No data will be loaded.")
-            return False # Cannot proceed if no file object is given
+            return False
 
         if self.data_loader is None:
-            # This case should ideally be caught by the 'else' above, but as a safeguard:
-            logger.error("DataManager could not initialize DataLoader, though an uploaded_file_obj was expected.")
+            logger.error("DataManager could not initialize DataLoader.")
             return False
 
         try:
-            # Load data using the initialized data loader
-            self.data, self.dictionary = self.data_loader.load_data()
+            self._raw_data, self.dictionary = self.data_loader.load_data()
             self.missing_data_report = self.data_loader.get_missing_data_report()
 
-            # Initialize data components if data loaded successfully
-            if self.data is not None and self.dictionary is not None:
-                st.session_state.processed_data = self.data.copy()
+            if self._raw_data is not None and self.dictionary is not None:
+                # Access self.data via property to get potentially filtered data
+                current_data_view = self.data 
+                if current_data_view is not None:
+                    st.session_state.processed_data = current_data_view.copy()
+                    log_msg_data_part = f"Current view: {len(current_data_view)} rows, {len(current_data_view.columns)} columns."
+                    if 'tx.group' not in current_data_view.columns:
+                        logger.warning("'tx.group' column not found in the current data view.")
+                else: # This case implies _raw_data might be empty or filtering resulted in None
+                    st.session_state.processed_data = None # Ensure it's None if current_data_view is None
+                    log_msg_data_part = "Current view is None (e.g. all columns filtered out or raw data empty)."
+                
                 st.session_state.data_loaded_time = pd.Timestamp.now()
                 log_file_name = getattr(uploaded_file_obj, 'name', 'the_uploaded_file')
-                logger.info(f"DataManager successfully loaded data: {len(self.data)} rows, {len(self.data.columns)} columns from {log_file_name}")
-
-                # Check for required treatment column (optional, based on dataset specs)
-                if 'tx.group' not in self.data.columns:
-                    logger.warning("'tx.group' column not found in the loaded dataset.")
+                logger.info(f"DataManager successfully loaded data. Raw: {len(self._raw_data)} rows, {len(self._raw_data.columns)} columns. {log_msg_data_part} From {log_file_name}")
                 return True
             else:
                 log_file_name_fail = getattr(uploaded_file_obj, 'name', 'the_uploaded_file')
-                logger.error(f"DataLoader failed to load data from {log_file_name_fail} (returned None for data/dictionary) within DataManager.")
-                # Ensure data attributes are reset if loading fails partway
-                self.data = None
+                logger.error(f"DataLoader failed to load data from {log_file_name_fail} (returned None for _raw_data/dictionary) within DataManager.")
+                self._raw_data = None
                 self.dictionary = None
                 self.missing_data_report = None
                 return False
         except Exception as e:
             log_file_name_exc = getattr(uploaded_file_obj, 'name', 'the_uploaded_file')
             logger.error(f"Exception occurred in DataManager.load_data while processing {log_file_name_exc}: {e}", exc_info=True)
-            # Reset state on critical failure
-            self.data = None
+            self._raw_data = None
             self.dictionary = None
             self.missing_data_report = None
-            # self.data_loader might be kept for debugging or reset: self.data_loader = None
             return False
 
-    def get_data(self) -> pd.DataFrame:
-        """Get the current processed data."""
-        return st.session_state.processed_data if st.session_state.processed_data is not None else self.data
+    def get_data(self) -> Optional[pd.DataFrame]:
+        """
+        Get the current processed data.
+        If st.session_state.processed_data is None (e.g., after a reset or initial load),
+        it attempts to re-initialize it from the base self.data property.
+        """
+        if st.session_state.get('processed_data') is None and self._raw_data is not None:
+            # self.data is the property that applies filtering based on 'ignore_follow_up_data'
+            current_data_view = self.data 
+            if current_data_view is not None:
+                st.session_state.processed_data = current_data_view.copy()
+                logger.info("DataManager.get_data: Re-initialized st.session_state.processed_data from self.data property.")
+            else:
+                # This could happen if self.data (property) returns None, e.g., _raw_data was empty or all columns were filtered out.
+                st.session_state.processed_data = None 
+                logger.info("DataManager.get_data: self.data property returned None; st.session_state.processed_data remains None.")
+        elif st.session_state.get('processed_data') is None and self._raw_data is None:
+            logger.info("DataManager.get_data: No raw data loaded, processed_data is None.")
+            
+        return st.session_state.get('processed_data')
 
-    def get_original_data(self) -> pd.DataFrame:
-        """Get the original unprocessed data."""
-        return self.data
+    def get_original_data(self) -> Optional[pd.DataFrame]:
+        """Get the original, unfiltered, unprocessed data as loaded from the source."""
+        return self._raw_data
 
     def get_data_dictionary(self) -> pd.DataFrame:
         """Get the data dictionary."""
@@ -168,9 +216,9 @@ class DataManager:
         if self.data_quality_enhancer is None and st.session_state.processed_data is not None:
             self.data_quality_enhancer = DataQualityEnhancer(st.session_state.processed_data)
 
-    def impute_missing_values(self, method: str, knn_neighbors: int, cols_to_exclude: List[str]) -> pd.DataFrame:
+    def impute_missing_values(self, method: str, knn_neighbors: int, cols_to_exclude: List[str]) -> Optional[pd.DataFrame]:
         """
-        Impute missing values in the dataset.
+        Impute missing values in the current working dataset (which respects 'ignore_follow_up_data').
 
         Args:
             method: Imputation method ('mean', 'median', 'knn')
@@ -178,32 +226,52 @@ class DataManager:
             cols_to_exclude: List of columns to exclude from imputation
 
         Returns:
-            DataFrame with imputed values
+            DataFrame with imputed values, or None if imputation fails or no data.
         """
-        # Impute missing values
-        imputed_data = self.data_loader.impute_missing_values(
+        current_data_to_impute = self.data # Access data via property to get the (potentially filtered) view
+        
+        if current_data_to_impute is None:
+            logger.error("DataManager.impute_missing_values: No data available for imputation (current data view is None).")
+            self.imputed_data = None
+            st.session_state.processed_data = None # Ensure processed_data is also None
+            return None
+        
+        if self.data_loader is None:
+            logger.error("DataManager.impute_missing_values: DataLoader not initialized, cannot impute.")
+            self.imputed_data = None
+            st.session_state.processed_data = None
+            return None
+
+        # Pass a copy of the current data view to the imputation method in DataLoader
+        # DataLoader's impute_missing_values is expected to handle the actual imputation logic.
+        imputed_df = self.data_loader.impute_missing_values(
+            data_to_impute=current_data_to_impute.copy(), # Important: pass a copy of the current view
             method=method,
             knn_neighbors=knn_neighbors,
             cols_to_exclude=cols_to_exclude
         )
 
-        # Store the imputed data
-        self.imputed_data = imputed_data
-        st.session_state.processed_data = imputed_data
+        self.imputed_data = imputed_df # Store the result of imputation
+        st.session_state.processed_data = imputed_df # Update session_state.processed_data with the imputed data
 
-        # Store imputation details in pipeline results
         if 'pipeline_results' not in st.session_state:
             st.session_state.pipeline_results = {}
-
+        
         st.session_state.pipeline_results['imputation'] = {
             'method': method,
             'knn_neighbors': knn_neighbors,
             'cols_excluded': cols_to_exclude,
-            'original_missing': self.data.isnull().sum().sum(),
-            'remaining_missing': imputed_data.isnull().sum().sum()
+            'timestamp': time.time(),
+            'data_shape_before': current_data_to_impute.shape,
+            'data_shape_after': imputed_df.shape if imputed_df is not None else None
         }
-
-        return imputed_data
+        
+        if imputed_df is not None:
+            logger.info(f"DataManager: Imputed missing values using {method} method on current data view. Excluded columns: {cols_to_exclude}. Shape before: {current_data_to_impute.shape}, after: {imputed_df.shape}")
+        else:
+            logger.warning(f"DataManager: Imputation with method {method} returned None.")
+        
+        return imputed_df
 
     def screen_variables(self, near_zero_threshold: float, collinearity_threshold: float, vif_threshold: float, force_include: List[str]) -> Dict[str, Any]:
         """
