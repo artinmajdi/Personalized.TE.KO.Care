@@ -37,6 +37,8 @@ from tekoa.visualization.pages import (
 # Things are added which needs to be checked to make sure hasn't impacted other things, are
 #   1) ability to load the new 208 patients excel without error
 #   2) show a column selection in the "Clustering Analysis" tab.
+#   3) add the checkbox to ignore the followup columns in the begining of the dashboard and use the updated data for the rest of the dashboard.
+
 
 from tekoa.visualization.phase2_pages import ClusteringPage, ValidationPage, CharacterizationPage
 
